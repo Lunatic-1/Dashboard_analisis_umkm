@@ -1,0 +1,5 @@
+content = open('app.py', encoding='utf-8').read()
+content = content.replace('use_container_width=True', 'width="stretch"')
+content = content.replace('use_container_width=False', 'width="content"')
+open('app.py', 'w', encoding='utf-8').write(content)
+print('Done - deprecation warnings fixed')
