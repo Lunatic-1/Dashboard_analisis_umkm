@@ -1,4 +1,4 @@
-# Dashboard Analisis Data UMKM Indonesia 🇮🇩
+# Dashboard Analisis Data UMKM Indonesia
 
 Dashboard web interaktif untuk analisis data **Usaha Mikro, Kecil, dan Menengah (UMKM)** Indonesia. Dibangun menggunakan Python dengan Streamlit, Plotly, Pandas, dan NumPy.
 
