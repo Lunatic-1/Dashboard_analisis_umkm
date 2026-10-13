@@ -723,98 +723,107 @@ def load_data() -> pd.DataFrame:
 
 df = load_data()
 
+
 # ============================================================
 # SIDEBAR FILTERS
 # ============================================================
+
 with st.sidebar:
+
+    # Logo dan judul sidebar
     st.markdown(
         """
-        <div style="text-align:center; padding: 16px 0;">
-            <span style="font-size: 42px;">📊</span>
+        <div style="text-align:center; padding:16px 0;">
+            <span style="font-size:42px;">📊</span>
             <h2 style="
-                font-family: 'Inter', sans-serif;
-                font-size: 20px;
-                font-weight: 700;
-                background: linear-gradient(135deg, #6366f1, #22d3ee);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                background-clip: text;
-                margin: 8px 0 4px 0;
+                font-family:'Inter', sans-serif;
+                font-size:20px;
+                font-weight:700;
+                background:linear-gradient(135deg, #6366f1, #22d3ee);
+                -webkit-background-clip:text;
+                -webkit-text-fill-color:transparent;
+                background-clip:text;
+                margin:8px 0 4px 0;
             ">UMKM Analytics</h2>
-            <p style="color: #64748b; font-size: 12px; margin: 0;">Dashboard Analisis Data</p>
+            <p style="color:#64748b; font-size:12px; margin:0;">
+                Dashboard Analisis Data
+            </p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-
-    # Theme Toggle
-    st.radio(
-        "🎨 Tema Tampilan",
-        options=['🌙 Dark', '☀️ Light'],
-        horizontal=True,
-        key='theme',
+    st.markdown(
+        '<div class="custom-divider"></div>',
+        unsafe_allow_html=True,
     )
 
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+    # Pilihan tema tampilan
+    st.radio(
+        "🎨 Tema Tampilan",
+        options=["🌙 Dark", "☀️ Light"],
+        horizontal=True,
+        key="theme",
+    )
 
-    # Filter Tahun
+    st.markdown(
+        '<div class="custom-divider"></div>',
+        unsafe_allow_html=True,
+    )
+
+    # 1. Filter rentang tahun
     tahun_options = sorted(df["tahun"].unique())
+
     selected_tahun = st.select_slider(
-        "📅 Pilih Rentang Tahun",
+        "📅 Rentang Tahun",
         options=tahun_options,
         value=(tahun_options[0], tahun_options[-1]),
+        key="filter_tahun",
     )
 
     st.markdown("")
 
-    # Filter Provinsi
+    # 2. Filter kategori produk
+    selected_kategori = st.selectbox(
+        "🛍️ Kategori Produk",
+        options=["Semua Kategori"],
+        index=0,
+        key="filter_kategori",
+    )
+
+    st.markdown("")
+
+    # 3. Filter metode pembayaran
+    selected_pembayaran = st.selectbox(
+        "💳 Metode Pembayaran",
+        options=["Semua Metode"],
+        index=0,
+        key="filter_pembayaran",
+    )
+
+    st.markdown("")
+
+    # 4. Filter wilayah / provinsi
     all_provinsi = sorted(df["provinsi"].unique())
+
     selected_provinsi = st.multiselect(
-        "🗺️ Pilih Provinsi",
+        "🗺️ Wilayah / Provinsi",
         options=all_provinsi,
         default=[],
         placeholder="Semua Provinsi",
+        key="filter_provinsi",
     )
-
-    st.markdown("")
-
-    # Filter Sektor
-    all_sektor = sorted(df["sektor"].unique())
-    selected_sektor = st.multiselect(
-        "🏪 Pilih Sektor Usaha",
-        options=all_sektor,
-        default=[],
-        placeholder="Semua Sektor",
-    )
-
-    st.markdown("")
-
-    # Filter Skala
-    all_skala = ["Mikro", "Kecil", "Menengah"]
-    selected_skala = st.multiselect(
-        "📏 Pilih Skala Usaha",
-        options=all_skala,
-        default=[],
-        placeholder="Semua Skala",
-    )
-
-    st.markdown("")
-
-    # Pencarian Provinsi
-    search_query = st.text_input(
-        "🔍 Cari Provinsi",
-        value="",
-        placeholder="Ketik nama provinsi...",
-    )
-
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
     st.markdown(
+        '<div class="custom-divider"></div>',
+        unsafe_allow_html=True,
+    )
+
+    # Informasi data
+    st.markdown(
         """
-        <div style="text-align:center; padding: 8px 0;">
-            <p style="color:#64748b; font-size: 11px; margin: 0;">
+        <div style="text-align:center; padding:8px 0;">
+            <p style="color:#64748b; font-size:11px; margin:0;">
                 Data sampel berdasarkan pola BPS Indonesia<br>
                 Periode 2019 – 2024
             </p>
@@ -826,30 +835,16 @@ with st.sidebar:
 # ============================================================
 # APPLY FILTERS
 # ============================================================
+
 filtered = df[
-    (df["tahun"] >= selected_tahun[0]) & (df["tahun"] <= selected_tahun[1])
+    (df["tahun"] >= selected_tahun[0]) &
+    (df["tahun"] <= selected_tahun[1])
 ].copy()
 
 if selected_provinsi:
-    filtered = filtered[filtered["provinsi"].isin(selected_provinsi)]
-
-if selected_sektor:
-    filtered = filtered[filtered["sektor"].isin(selected_sektor)]
-
-if selected_skala:
-    filtered = filtered[filtered["skala"].isin(selected_skala)]
-
-# Filter berdasarkan pencarian provinsi
-if search_query:
-    filtered = filtered[filtered["provinsi"].str.contains(search_query, case=False, na=False)]
-
-# Search feedback
-if search_query:
-    matched_count = filtered["provinsi"].nunique()
-    if matched_count > 0:
-        st.success(f"🔍 Ditemukan **{matched_count} provinsi** cocok dengan \"{search_query}\"")
-    else:
-        st.warning(f"⚠️ Tidak ditemukan provinsi dengan kata kunci \"{search_query}\"")
+    filtered = filtered[
+        filtered["provinsi"].isin(selected_provinsi)
+    ]
 
 # ============================================================
 # DASHBOARD HEADER
@@ -857,7 +852,7 @@ if search_query:
 st.markdown(
     """
     <div class="dashboard-title">
-        <h1>🇮🇩 Dashboard Analisis UMKM Indonesia</h1>
+        <h1>Dashboard Analisis UMKM Indonesia</h1>
         <p>Visualisasi data komprehensif Usaha Mikro, Kecil, dan Menengah di Indonesia</p>
     </div>
     <div class="custom-divider"></div>
