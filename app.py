@@ -873,16 +873,6 @@ if selected_provinsi:
 else:
     prov_badge = "🗺️ Semua Provinsi"
 
-if selected_sektor:
-    sektor_badge = "🏪 " + ", ".join(selected_sektor) if len(selected_sektor) <= 2 else f"🏪 {len(selected_sektor)} Sektor"
-else:
-    sektor_badge = "🏪 Semua Sektor"
-
-if selected_skala:
-    skala_badge = "📏 " + ", ".join(selected_skala)
-else:
-    skala_badge = "📏 Semua Skala"
-
 total_rows = len(filtered)
 
 st.markdown(
@@ -891,8 +881,6 @@ st.markdown(
         <span class="filter-badge-label">🔎 Filter Aktif:</span>
         <span class="filter-badge year">{tahun_badge}</span>
         <span class="filter-badge prov">{prov_badge}</span>
-        <span class="filter-badge sector">{sektor_badge}</span>
-        <span class="filter-badge scale">{skala_badge}</span>
         <span style="margin-left:auto; font-size:11px; color:#64748b; font-weight:500;">
             {total_rows:,} baris data
         </span>
@@ -900,7 +888,6 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
 # ============================================================
 # KPI CARDS
 # ============================================================
