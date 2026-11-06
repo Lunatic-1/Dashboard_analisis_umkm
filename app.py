@@ -1,1618 +1,648 @@
-"""
+"""Dashboard Analisis Industri Mikro dan Kecil (IMK) Indonesia, 2024-2025.
 
-Dashboard Analisis Data UMKM Indonesia
-========================================
-Dashboard web interaktif menggunakan Streamlit, Plotly, Pandas, dan NumPy.
-Menampilkan analisis komprehensif data UMKM Indonesia.
+Sumber data: BPS, Profil Industri Mikro dan Kecil 2024 dan 2025.
+Jalankan dengan:  streamlit run app.py
 """
+import io
 
-import json
-import streamlit as st
+import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import pandas as pd
-import numpy as np
-from io import BytesIO
-from data_generator import generate_umkm_data
+import streamlit as st
 
-# ============================================================
-# PAGE CONFIG & CUSTOM CSS
-# ============================================================
-st.set_page_config(
-    page_title="Dashboard UMKM Indonesia",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded",
+from src.analysis import (
+    FITUR_KLASTER,
+    klaster,
+    perubahan_nasional,
+    perubahan_provinsi,
+    regresi,
 )
+from src import penjualan as pj
+from src.data import fmt_id, load_kbli, load_provinsi
 
-# ============================================================
-# THEME INITIALIZATION
-# ============================================================
-if 'theme' not in st.session_state:
-    st.session_state.theme = '🌙 Dark'
+st.set_page_config(page_title="Dashboard Analisis UMKM Indonesia", layout="wide")
 
-is_dark = st.session_state.theme == '🌙 Dark'
+BIRU = "#1F4E79"
+MERAH = "#B5503C"
+PALET = ["#1F4E79", "#B5503C", "#4F8A5B", "#7B6A9E", "#C98B2B", "#5B9BD5", "#7F8C99"]
+FONT = "Source Sans 3, Segoe UI, Arial, sans-serif"
 
-THEME = {
-    'font_color': '#e2e8f0' if is_dark else '#1e293b',
-    'text_secondary': '#94a3b8' if is_dark else '#64748b',
-    'hover_bg': '#1e293b' if is_dark else '#ffffff',
-    'hover_font': '#f1f5f9' if is_dark else '#0f172a',
-    'grid': 'rgba(148,163,184,0.08)' if is_dark else 'rgba(0,0,0,0.06)',
-    'marker_line': '#0a0e1a' if is_dark else '#ffffff',
-    'heatmap_text': 'white' if is_dark else '#1e293b',
-    'map_paper_bg': 'rgba(10,14,26,0)' if is_dark else 'rgba(241,245,249,0)',
-    'map_land': '#1e293b' if is_dark else '#e2e8f0',
-    'map_ocean': '#0f172a' if is_dark else '#dbeafe',
-}
-
-LIGHT_OVERRIDE_CSS = """
+# ---------------------------------------------------------------- Gaya halaman
+st.markdown(
+    """
 <style>
-    :root {
-        --bg-primary: #f1f5f9 !important;
-        --bg-secondary: #e2e8f0 !important;
-        --bg-card: rgba(255, 255, 255, 0.9) !important;
-        --border-card: rgba(99, 102, 241, 0.15) !important;
-        --text-primary: #0f172a !important;
-        --text-secondary: #475569 !important;
-    }
-    .stApp {
-        background: linear-gradient(135deg, #f1f5f9 0%, #e8eef7 50%, #f1f5f9 100%) !important;
-    }
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #eef2ff 0%, #f1f5f9 100%) !important;
-        border-right: 1px solid rgba(99, 102, 241, 0.15) !important;
-    }
-    section[data-testid="stSidebar"] .stMarkdown p,
-    section[data-testid="stSidebar"] .stMarkdown label,
-    section[data-testid="stSidebar"] label {
-        color: #475569 !important;
-    }
-    section[data-testid="stSidebar"] .stSelectbox label,
-    section[data-testid="stSidebar"] .stMultiSelect label {
-        color: #0f172a !important;
-    }
-    .kpi-card {
-        background: rgba(255, 255, 255, 0.9) !important;
-        border-color: rgba(99, 102, 241, 0.15) !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .kpi-card:hover {
-        box-shadow: 0 12px 40px rgba(99, 102, 241, 0.10) !important;
-    }
-    .kpi-label { color: #475569 !important; }
-    .kpi-value { color: #0f172a !important; }
-    .chart-container {
-        background: rgba(255, 255, 255, 0.9) !important;
-        border-color: rgba(99, 102, 241, 0.15) !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .chart-container:hover {
-        box-shadow: 0 8px 32px rgba(99, 102, 241, 0.08) !important;
-    }
-    .chart-title { color: #0f172a !important; }
-    .section-header {
-        color: #0f172a !important;
-        border-bottom-color: rgba(99, 102, 241, 0.3) !important;
-    }
-    .dashboard-title h1 {
-        background: linear-gradient(135deg, #4338ca, #0891b2, #059669) !important;
-        -webkit-background-clip: text !important;
-        background-clip: text !important;
-    }
-    .dashboard-title p { color: #475569 !important; }
-    .footer {
-        color: #475569 !important;
-        border-top-color: rgba(99, 102, 241, 0.15) !important;
-    }
-    .stTabs [data-baseweb="tab"] {
-        background: rgba(255, 255, 255, 0.9) !important;
-        border-color: rgba(99, 102, 241, 0.15) !important;
-        color: #475569 !important;
-    }
-    div[data-testid="stMetric"] {
-        background: rgba(255, 255, 255, 0.9) !important;
-        border-color: rgba(99, 102, 241, 0.15) !important;
-    }
-    .custom-divider {
-        background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.2), transparent) !important;
-    }
-    .filter-badge-bar {
-        background: rgba(255, 255, 255, 0.85) !important;
-        border-color: rgba(99, 102, 241, 0.15) !important;
-        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.06) !important;
-    }
-    .filter-badge-label { color: #475569 !important; }
-    .insight-box {
-        background: rgba(255, 255, 255, 0.85) !important;
-        border-color: rgba(99, 102, 241, 0.2) !important;
-    }
-    .insight-box p { color: #334155 !important; }
-    .kpi-progress-bg { background: rgba(99, 102, 241, 0.08) !important; }
-    .kpi-card::after { opacity: 0 !important; }
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600&family=Source+Serif+4:wght@600;700&display=swap');
+.stApp { font-family: 'Source Sans 3', 'Segoe UI', Arial, sans-serif; color: #1F2933; }
+h1, h2, h3 { font-family: 'Source Serif 4', Georgia, serif !important; color: #14263B; font-weight: 600; letter-spacing: 0; }
+.block-container { max-width: 1240px; padding-top: 2.2rem; padding-bottom: 3rem; }
+h1 { font-size: 1.95rem !important; padding-bottom: .45rem; border-bottom: 2px solid #1F4E79; margin-bottom: .4rem; }
+h3 { font-size: 1.2rem !important; margin-top: 1.2rem; }
+[data-testid="stCaptionContainer"] { color: #5B6B7B; }
+[data-testid="stMetric"] { background: #FFFFFF; border: 1px solid #D9DEE5; border-left: 4px solid #1F4E79;
+    border-radius: 4px; padding: 14px 16px; }
+[data-testid="stMetricLabel"] p { font-size: .82rem; color: #5B6B7B; font-weight: 500; }
+[data-testid="stMetricValue"] { font-size: 1.65rem; color: #14263B; font-weight: 600; }
+.stTabs [data-baseweb="tab-list"] { gap: 2px; border-bottom: 1px solid #D9DEE5; }
+.stTabs [data-baseweb="tab"] { padding: 10px 18px; font-weight: 500; color: #4A5A6A; }
+.stTabs [aria-selected="true"] { color: #1F4E79; font-weight: 600; }
+section[data-testid="stSidebar"] { border-right: 1px solid #D9DEE5; }
+[data-testid="stSidebar"] h2 { font-size: 1.1rem !important; }
+[data-testid="stDataFrame"] { border: 1px solid #D9DEE5; border-radius: 4px; }
+div[data-testid="stAlert"] { border-radius: 4px; }
+#MainMenu, footer { visibility: hidden; }
 </style>
-"""
-
-CUSTOM_CSS = """
-<style>
-    /* ── Import Google Fonts ────────────────────────────────── */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
-    /* ── Root Variables ─────────────────────────────────────── */
-    :root {
-        --bg-primary: #0a0e1a;
-        --bg-secondary: #111827;
-        --bg-card: rgba(17, 24, 39, 0.7);
-        --border-card: rgba(99, 102, 241, 0.15);
-        --text-primary: #f1f5f9;
-        --text-secondary: #94a3b8;
-        --accent-blue: #6366f1;
-        --accent-cyan: #22d3ee;
-        --accent-emerald: #10b981;
-        --accent-rose: #f43f5e;
-        --accent-amber: #f59e0b;
-        --accent-violet: #8b5cf6;
-        --gradient-1: linear-gradient(135deg, #6366f1, #8b5cf6);
-        --gradient-2: linear-gradient(135deg, #22d3ee, #10b981);
-        --gradient-3: linear-gradient(135deg, #f43f5e, #f59e0b);
-        --gradient-4: linear-gradient(135deg, #10b981, #6366f1);
-    }
-
-    /* ── Global Styles ──────────────────────────────────────── */
-    .stApp {
-        background: var(--bg-primary);
-        font-family: 'Inter', sans-serif;
-    }
-
-    .stApp > header {
-        background: transparent;
-    }
-
-    /* ── Sidebar ────────────────────────────────────────────── */
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f172a 0%, #1e1b4b 100%);
-        border-right: 1px solid var(--border-card);
-    }
-
-    section[data-testid="stSidebar"] .stMarkdown p,
-    section[data-testid="stSidebar"] .stMarkdown label,
-    section[data-testid="stSidebar"] label {
-        color: var(--text-secondary) !important;
-        font-family: 'Inter', sans-serif;
-    }
-
-    section[data-testid="stSidebar"] .stSelectbox label,
-    section[data-testid="stSidebar"] .stMultiSelect label {
-        color: var(--text-primary) !important;
-        font-weight: 500;
-    }
-
-    /* ── KPI Metric Cards ───────────────────────────────────── */
-    .kpi-container {
-        display: flex;
-        gap: 16px;
-        flex-wrap: wrap;
-        margin-bottom: 24px;
-    }
-
-    .kpi-card {
-        flex: 1;
-        min-width: 200px;
-        padding: 24px 20px 20px 20px;
-        border-radius: 20px;
-        background: var(--bg-card);
-        backdrop-filter: blur(16px);
-        border: 1px solid var(--border-card);
-        position: relative;
-        overflow: hidden;
-        transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.35s ease;
-    }
-
-    .kpi-card:hover {
-        transform: translateY(-6px) scale(1.01);
-        box-shadow: 0 20px 50px rgba(99, 102, 241, 0.18);
-    }
-
-    /* Top gradient bar */
-    .kpi-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        border-radius: 20px 20px 0 0;
-        transition: height 0.3s ease;
-    }
-
-    .kpi-card:hover::before { height: 6px; }
-
-    .kpi-card:nth-child(1)::before { background: var(--gradient-1); }
-    .kpi-card:nth-child(2)::before { background: var(--gradient-2); }
-    .kpi-card:nth-child(3)::before { background: var(--gradient-3); }
-    .kpi-card:nth-child(4)::before { background: var(--gradient-4); }
-
-    /* Glow orb */
-    .kpi-card::after {
-        content: '';
-        position: absolute;
-        bottom: -30px;
-        right: -30px;
-        width: 100px;
-        height: 100px;
-        border-radius: 50%;
-        opacity: 0.06;
-        transition: opacity 0.3s ease, transform 0.3s ease;
-    }
-    .kpi-card:hover::after { opacity: 0.14; transform: scale(1.3); }
-    .kpi-card:nth-child(1)::after { background: #6366f1; }
-    .kpi-card:nth-child(2)::after { background: #22d3ee; }
-    .kpi-card:nth-child(3)::after { background: #f43f5e; }
-    .kpi-card:nth-child(4)::after { background: #10b981; }
-
-    .kpi-icon {
-        font-size: 28px;
-        margin-bottom: 8px;
-        display: block;
-    }
-
-    .kpi-label {
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 1.5px;
-        color: var(--text-secondary);
-        margin-bottom: 6px;
-    }
-
-    .kpi-value {
-        font-size: 30px;
-        font-weight: 800;
-        color: var(--text-primary);
-        line-height: 1.1;
-        letter-spacing: -0.5px;
-    }
-
-    .kpi-delta {
-        font-size: 12px;
-        font-weight: 600;
-        margin-top: 6px;
-    }
-
-    .kpi-delta.positive { color: var(--accent-emerald); }
-    .kpi-delta.negative { color: var(--accent-rose); }
-
-    /* Progress bar under value */
-    .kpi-progress-bg {
-        height: 4px;
-        border-radius: 999px;
-        background: rgba(255,255,255,0.07);
-        margin-top: 10px;
-        overflow: hidden;
-    }
-    .kpi-progress-fill {
-        height: 100%;
-        border-radius: 999px;
-        transition: width 1s cubic-bezier(0.4,0,0.2,1);
-    }
-    .kpi-card:nth-child(1) .kpi-progress-fill { background: var(--gradient-1); }
-    .kpi-card:nth-child(2) .kpi-progress-fill { background: var(--gradient-2); }
-    .kpi-card:nth-child(3) .kpi-progress-fill { background: var(--gradient-3); }
-    .kpi-card:nth-child(4) .kpi-progress-fill { background: var(--gradient-4); }
-
-    /* ── Filter Badge Bar ───────────────────────────────────── */
-    .filter-badge-bar {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-        padding: 10px 16px;
-        border-radius: 12px;
-        background: rgba(17, 24, 39, 0.6);
-        backdrop-filter: blur(12px);
-        border: 1px solid var(--border-card);
-        margin-bottom: 20px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-    }
-    .filter-badge-label {
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        color: var(--text-secondary);
-        margin-right: 4px;
-    }
-    .filter-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-size: 12px;
-        font-weight: 500;
-        font-family: 'Inter', sans-serif;
-    }
-    .filter-badge.year   { background: rgba(99,102,241,0.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.25); }
-    .filter-badge.prov   { background: rgba(34,211,238,0.12); color: #67e8f9; border: 1px solid rgba(34,211,238,0.2); }
-    .filter-badge.sector { background: rgba(16,185,129,0.12); color: #6ee7b7; border: 1px solid rgba(16,185,129,0.2); }
-    .filter-badge.scale  { background: rgba(245,158,11,0.12); color: #fcd34d; border: 1px solid rgba(245,158,11,0.2); }
-
-    /* ── Insight Box ────────────────────────────────────────── */
-    .insight-box {
-        padding: 14px 18px;
-        border-radius: 12px;
-        background: rgba(99,102,241,0.07);
-        border: 1px solid rgba(99,102,241,0.18);
-        margin-bottom: 20px;
-        animation: fadeSlideIn 0.5s ease;
-    }
-    .insight-box .insight-title {
-        font-size: 12px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 1.2px;
-        color: #a5b4fc;
-        margin-bottom: 6px;
-    }
-    .insight-box p {
-        font-size: 13px;
-        color: #cbd5e1;
-        margin: 0;
-        line-height: 1.6;
-    }
-    .insight-box strong { color: #e2e8f0; }
-
-    @keyframes fadeSlideIn {
-        from { opacity: 0; transform: translateY(-8px); }
-        to   { opacity: 1; transform: translateY(0); }
-    }
-
-    /* ── Section Headers ────────────────────────────────────── */
-    .section-header {
-        font-family: 'Inter', sans-serif;
-        font-size: 20px;
-        font-weight: 700;
-        color: var(--text-primary);
-        margin: 36px 0 16px 0;
-        padding-bottom: 10px;
-        border-bottom: 3px solid transparent;
-        border-image: linear-gradient(90deg, #6366f1, #22d3ee, transparent) 1;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-
-    /* ── Chart Container ────────────────────────────────────── */
-    .chart-container {
-        background: var(--bg-card);
-        backdrop-filter: blur(16px);
-        border: 1px solid var(--border-card);
-        border-radius: 20px;
-        padding: 22px;
-        margin-bottom: 16px;
-        transition: box-shadow 0.35s ease, border-color 0.35s ease;
-    }
-
-    .chart-container:hover {
-        box-shadow: 0 12px 40px rgba(99, 102, 241, 0.12);
-        border-color: rgba(99, 102, 241, 0.25);
-    }
-
-    .chart-title {
-        font-family: 'Inter', sans-serif;
-        font-size: 16px;
-        font-weight: 700;
-        color: var(--text-primary);
-        margin-bottom: 14px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        letter-spacing: -0.2px;
-    }
-
-    /* ── Dashboard Title ────────────────────────────────────── */
-    .dashboard-title {
-        text-align: center;
-        padding: 24px 0 16px 0;
-    }
-
-    .dashboard-title h1 {
-        font-family: 'Inter', sans-serif;
-        font-size: 38px;
-        font-weight: 800;
-        background: linear-gradient(135deg, #6366f1, #22d3ee, #10b981);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        margin-bottom: 6px;
-        letter-spacing: -1px;
-    }
-
-    .dashboard-title p {
-        color: var(--text-secondary);
-        font-size: 14px;
-        font-weight: 400;
-    }
-
-    /* ── Divider ────────────────────────────────────────────── */
-    .custom-divider {
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(99,102,241,0.25), transparent);
-        margin: 16px 0;
-    }
-
-    /* ── Streamlit Overrides ────────────────────────────────── */
-    .stDataFrame {
-        border-radius: 14px;
-        overflow: hidden;
-    }
-
-    div[data-testid="stMetric"] {
-        background: var(--bg-card);
-        border: 1px solid var(--border-card);
-        border-radius: 14px;
-        padding: 16px;
-    }
-
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        background: transparent;
-    }
-
-    .stTabs [data-baseweb="tab"] {
-        background: var(--bg-card);
-        border: 1px solid var(--border-card);
-        border-radius: 999px;
-        color: var(--text-secondary);
-        font-family: 'Inter', sans-serif;
-        font-weight: 600;
-        font-size: 13px;
-        padding: 6px 18px;
-        transition: all 0.2s ease;
-    }
-
-    .stTabs [data-baseweb="tab"]:hover {
-        border-color: rgba(99,102,241,0.4);
-        color: #a5b4fc;
-    }
-
-    .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
-        color: white !important;
-        border-color: transparent !important;
-        box-shadow: 0 4px 14px rgba(99,102,241,0.35);
-    }
-
-    /* ── Download Button ────────────────────────────────────── */
-    .stDownloadButton > button {
-        background: var(--gradient-1) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 10px !important;
-        font-family: 'Inter', sans-serif !important;
-        font-weight: 600 !important;
-        padding: 8px 24px !important;
-        transition: opacity 0.2s ease, transform 0.2s ease !important;
-        box-shadow: 0 4px 14px rgba(99,102,241,0.3) !important;
-    }
-
-    .stDownloadButton > button:hover {
-        opacity: 0.88 !important;
-        transform: translateY(-1px) !important;
-    }
-
-    /* ── Footer ─────────────────────────────────────────────── */
-    .footer {
-        text-align: center;
-        padding: 32px 0 16px 0;
-        color: var(--text-secondary);
-        font-size: 12px;
-        border-top: 1px solid var(--border-card);
-        margin-top: 40px;
-    }
-
-    /* ── Count-up Animation ─────────────────────────────────── */
-    @keyframes countUp {
-        from { opacity: 0; transform: translateY(12px); }
-        to   { opacity: 1; transform: translateY(0); }
-    }
-    .kpi-value {
-        animation: countUp 0.6s ease both;
-    }
-    .kpi-card:nth-child(1) .kpi-value { animation-delay: 0.0s; }
-    .kpi-card:nth-child(2) .kpi-value { animation-delay: 0.1s; }
-    .kpi-card:nth-child(3) .kpi-value { animation-delay: 0.2s; }
-    .kpi-card:nth-child(4) .kpi-value { animation-delay: 0.3s; }
-</style>
-"""
-
-st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
-if not is_dark:
-    st.markdown(LIGHT_OVERRIDE_CSS, unsafe_allow_html=True)
-
-# ============================================================
-# PLOTLY TEMPLATE (Dark Premium)
-# ============================================================
-_BASE_LEGEND = dict(
-    bgcolor="rgba(0,0,0,0)",
-    bordercolor="rgba(99,102,241,0.15)",
-    borderwidth=1,
-    font=dict(size=11, color=THEME['text_secondary']),
-)
-
-_BASE_XAXIS = dict(
-    gridcolor=THEME['grid'],
-    zerolinecolor=THEME['grid'],
-)
-
-_BASE_YAXIS = dict(
-    gridcolor=THEME['grid'],
-    zerolinecolor=THEME['grid'],
+""",
+    unsafe_allow_html=True,
 )
 
 
-def make_layout(*, legend=None, xaxis=None, yaxis=None, **kwargs):
-    """Build a Plotly layout dict, deep-merging base defaults with overrides."""
-    merged_legend = {**_BASE_LEGEND, **(legend or {})}
-    merged_xaxis = {**_BASE_XAXIS, **(xaxis or {})}
-    merged_yaxis = {**_BASE_YAXIS, **(yaxis or {})}
-    return dict(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, sans-serif", color=THEME['font_color'], size=12),
-        margin=dict(l=40, r=20, t=40, b=40),
-        legend=merged_legend,
-        xaxis=merged_xaxis,
-        yaxis=merged_yaxis,
-        hoverlabel=dict(
-            bgcolor=THEME['hover_bg'],
-            bordercolor="#6366f1",
-            font=dict(family="Inter", color=THEME['hover_font']),
-        ),
-        **kwargs,
-    )
-
-COLOR_PALETTE = [
-    "#6366f1", "#22d3ee", "#10b981", "#f43f5e", "#f59e0b",
-    "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#3b82f6",
-]
-
-SEKTOR_COLORS = {
-    "Perdagangan": "#6366f1",
-    "Kuliner": "#22d3ee",
-    "Fashion": "#f43f5e",
-    "Jasa": "#10b981",
-    "Pertanian": "#f59e0b",
-    "Kerajinan": "#8b5cf6",
-    "Teknologi": "#ec4899",
-}
-
-SKALA_COLORS = {
-    "Mikro": "#6366f1",
-    "Kecil": "#22d3ee",
-    "Menengah": "#10b981",
-}
-
-
-# ============================================================
-# HELPER FUNCTIONS
-# ============================================================
-def format_number(n: float, prefix: str = "") -> str:
-    """Format angka besar menjadi K, M, B."""
-    if abs(n) >= 1_000_000_000:
-        return f"{prefix}{n / 1_000_000_000:.1f} B"
-    elif abs(n) >= 1_000_000:
-        return f"{prefix}{n / 1_000_000:.1f} M"
-    elif abs(n) >= 1_000:
-        return f"{prefix}{n / 1_000:.1f} K"
-    return f"{prefix}{n:,.0f}"
-
-
-def format_rupiah(n: float) -> str:
-    """Format angka ke Rupiah (dalam juta)."""
-    if abs(n) >= 1_000_000:
-        return f"Rp {n / 1_000_000:.1f} T"
-    elif abs(n) >= 1_000:
-        return f"Rp {n / 1_000:.1f} M"
-    return f"Rp {n:,.0f} Jt"
-
-
-def to_excel(dataframe: pd.DataFrame) -> bytes:
-    """Convert DataFrame ke format Excel bytes."""
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        dataframe.to_excel(writer, index=False, sheet_name='Data')
-    return output.getvalue()
-
-
-def generate_insight(filtered: pd.DataFrame, section: str) -> str:
-    """Generate otomatis insight teks berdasarkan data yang difilter."""
-    if filtered.empty:
-        return "Tidak ada data yang sesuai dengan filter yang dipilih."
-
-    if section == "distribusi":
-        top_prov = (
-            filtered.groupby("provinsi")["jumlah_umkm"].sum()
-            .sort_values(ascending=False)
-        )
-        if top_prov.empty:
-            return "Data tidak tersedia."
-        prov1 = top_prov.index[0]
-        val1 = format_number(top_prov.iloc[0])
-        top_sektor = filtered.groupby("sektor")["jumlah_umkm"].sum().idxmax()
-        share_prov = top_prov.iloc[0] / top_prov.sum() * 100
-        return (
-            f"<strong>{prov1}</strong> menjadi provinsi dengan UMKM terbanyak ({val1} unit, "
-            f"kontribusi <strong>{share_prov:.1f}%</strong> dari total). "
-            f"Sektor dominan secara nasional adalah <strong>{top_sektor}</strong>."
-        )
-
-    elif section == "tren":
-        trend = filtered.groupby("tahun")["jumlah_umkm"].sum().sort_index()
-        if len(trend) < 2:
-            return "Dibutuhkan minimal 2 tahun data untuk analisis tren."
-        peak_year = trend.idxmax()
-        min_year = trend.idxmin()
-        growth_total = (trend.iloc[-1] - trend.iloc[0]) / trend.iloc[0] * 100 if trend.iloc[0] > 0 else 0
-        return (
-            f"Puncak jumlah UMKM terjadi pada tahun <strong>{peak_year}</strong> "
-            f"({format_number(trend[peak_year])} unit). "
-            f"Tahun <strong>{min_year}</strong> mencatat angka terendah. "
-            f"Pertumbuhan total periode ini: <strong>{growth_total:+.1f}%</strong>."
-        )
-
-    elif section == "skala":
-        avg_omzet = filtered.groupby("skala")["omzet_juta"].mean().sort_values(ascending=False)
-        if avg_omzet.empty:
-            return "Data tidak tersedia."
-        top_skala = avg_omzet.index[0]
-        ratio = avg_omzet.iloc[0] / avg_omzet.iloc[-1] if avg_omzet.iloc[-1] > 0 else 1
-        top_sektor_per_skala = (
-            filtered[filtered["skala"] == "Menengah"]
-            .groupby("sektor")["omzet_juta"].mean()
-            .idxmax() if not filtered[filtered["skala"] == "Menengah"].empty else "N/A"
-        )
-        return (
-            f"Skala <strong>{top_skala}</strong> mencatat rata-rata omzet tertinggi, "
-            f"sekitar <strong>{ratio:.1f}x</strong> lebih tinggi dari skala terkecil. "
-            f"Di skala Menengah, sektor <strong>{top_sektor_per_skala}</strong> mendominasi omzet."
-        )
-
-    elif section == "analisis":
-        corr_cols = ["jumlah_umkm", "tenaga_kerja", "omzet_juta", "pertumbuhan_pct"]
-        if filtered[corr_cols].shape[0] < 5:
-            return "Data terlalu sedikit untuk analisis korelasi."
-        corr = filtered[corr_cols].corr()
-        tk_omzet_corr = corr.loc["tenaga_kerja", "omzet_juta"]
-        umkm_tk_corr = corr.loc["jumlah_umkm", "tenaga_kerja"]
-        strength = "kuat" if abs(tk_omzet_corr) > 0.7 else "sedang" if abs(tk_omzet_corr) > 0.4 else "lemah"
-        direction = "positif" if tk_omzet_corr > 0 else "negatif"
-        return (
-            f"Terdapat korelasi <strong>{strength} {direction}</strong> "
-            f"(r = {tk_omzet_corr:.2f}) antara Tenaga Kerja dan Omzet. "
-            f"Korelasi Jumlah UMKM–Tenaga Kerja: <strong>r = {umkm_tk_corr:.2f}</strong>."
-        )
-
-    return ""
-
-
-# ============================================================
-# INDONESIA GEOJSON (Simplified bounding boxes for 34 provinsi)
-# Uses a lightweight inline approach — fetches from reliable CDN
-# ============================================================
-@st.cache_data(show_spinner=False)
-def load_indonesia_geojson():
-    """Load GeoJSON Indonesia dari URL publik (cached)."""
-    import urllib.request
-    url = "https://raw.githubusercontent.com/superpikar/indonesia-geojson/master/indonesia.geojson"
-    try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            return json.loads(resp.read().decode())
-    except Exception:
-        return None
-
-
-# ============================================================
-# LOAD DATA
-# ============================================================
 @st.cache_data
-def load_data() -> pd.DataFrame:
-    """Load dan cache dataset UMKM."""
-    return generate_umkm_data()
+def muat():
+    return load_provinsi(), load_kbli()
 
 
-df = load_data()
+prov, kbli = muat()
+
+# nama: (kolom, satuan, format label)
+METRIK = {
+    "Jumlah usaha": ("usaha", "usaha", ",.0f"),
+    "Jumlah pekerja": ("pekerja_total", "orang", ",.0f"),
+    "Pendapatan (Rp triliun)": ("pendapatan_triliun", "Rp triliun", ",.1f"),
+    "Pengeluaran (Rp triliun)": ("pengeluaran_triliun", "Rp triliun", ",.1f"),
+}
+INDIKATOR = {
+    "Pendapatan per usaha (juta Rp)": "pend_per_usaha_juta",
+    "Pekerja per usaha (orang)": "pekerja_per_usaha",
+    "Pendapatan per pekerja (juta Rp)": "pend_per_pekerja_juta",
+    "Margin (%)": "margin_pct",
+    "Pekerja tidak dibayar (%)": "pct_tdk_dibayar",
+}
 
 
-# ============================================================
-# SIDEBAR FILTERS
-# ============================================================
-
-with st.sidebar:
-
-    # Logo dan judul sidebar
-    st.markdown(
-        """
-        <div style="text-align:center; padding:16px 0;">
-            <span style="font-size:42px;">📊</span>
-            <h2 style="
-                font-family:'Inter', sans-serif;
-                font-size:20px;
-                font-weight:700;
-                background:linear-gradient(135deg, #6366f1, #22d3ee);
-                -webkit-background-clip:text;
-                -webkit-text-fill-color:transparent;
-                background-clip:text;
-                margin:8px 0 4px 0;
-            ">UMKM Analytics</h2>
-            <p style="color:#64748b; font-size:12px; margin:0;">
-                Dashboard Analisis Data
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
+def tema(fig, tinggi=420):
+    """Gaya grafik seragam: bersih, garis kisi tipis, angka format Indonesia."""
+    fig.update_layout(
+        template="simple_white",
+        height=tinggi,
+        separators=",.",
+        font=dict(family=FONT, size=13, color="#2B3A4A"),
+        title=dict(x=0, xanchor="left", font=dict(size=15, color="#14263B")),
+        margin=dict(l=10, r=25, t=55, b=10),
+        legend_title_text="",
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+        hoverlabel=dict(bgcolor="white", font_size=12),
     )
+    fig.update_xaxes(showgrid=True, gridcolor="#EDF0F4", zeroline=False, linecolor="#C5CCD6")
+    fig.update_yaxes(showgrid=True, gridcolor="#EDF0F4", zeroline=False, linecolor="#C5CCD6")
+    return fig
 
-    st.markdown(
-        '<div class="custom-divider"></div>',
-        unsafe_allow_html=True,
-    )
 
-    # Pilihan tema tampilan
-    st.radio(
-        "🎨 Tema Tampilan",
-        options=["🌙 Dark", "☀️ Light"],
-        horizontal=True,
-        key="theme",
-    )
+def tampil(fig, tinggi=420):
+    with st.container(border=True):
+        st.plotly_chart(tema(fig, tinggi), width="stretch", config={"displayModeBar": False})
 
-    st.markdown(
-        '<div class="custom-divider"></div>',
-        unsafe_allow_html=True,
-    )
 
-    # 1. Filter rentang tahun
-    tahun_options = sorted(df["tahun"].unique())
+def tabel_fmt(df: pd.DataFrame, desimal: int = 2) -> pd.DataFrame:
+    """Format seluruh kolom numerik dengan gaya angka Indonesia."""
+    return df.apply(lambda kol: kol.map(lambda v: fmt_id(v, desimal) if isinstance(v, (int, float, np.number)) else v))
 
-    selected_tahun = st.select_slider(
-        "📅 Rentang Tahun",
-        options=tahun_options,
-        value=(tahun_options[0], tahun_options[-1]),
-        key="filter_tahun",
-    )
 
-    st.markdown("")
+# ---------------------------------------------------------------- Modul penjualan usaha
+@st.cache_data
+def _contoh():
+    return pj.contoh_data()
 
-    # 2. Filter kategori produk
-    selected_kategori = st.selectbox(
-        "🛍️ Kategori Produk",
-        options=["Semua Kategori"],
-        index=0,
-        key="filter_kategori",
-    )
 
-    st.markdown("")
+@st.cache_data
+def _baca(nama: str, isi: bytes) -> pd.DataFrame:
+    if nama.lower().endswith((".xlsx", ".xls")):
+        return pd.read_excel(io.BytesIO(isi))
+    return pd.read_csv(io.BytesIO(isi), sep=None, engine="python")
 
-    # 3. Filter metode pembayaran
-    selected_pembayaran = st.selectbox(
-        "💳 Metode Pembayaran",
-        options=["Semua Metode"],
-        index=0,
-        key="filter_pembayaran",
-    )
 
-    st.markdown("")
+def _tebak(kolom, kunci, opsional=False):
+    """Tebak kolom dari nama; untuk kolom opsional indeks digeser satu karena ada '(tidak ada)'."""
+    for i, k in enumerate(kolom):
+        if any(x in str(k).lower() for x in kunci):
+            return i + 1 if opsional else i
+    return 0
 
-    # 4. Filter wilayah / provinsi
-    all_provinsi = sorted(df["provinsi"].unique())
 
-    selected_provinsi = st.multiselect(
-        "🗺️ Wilayah / Provinsi",
-        options=all_provinsi,
-        default=[],
-        placeholder="Semua Provinsi",
-        key="filter_provinsi",
-    )
+def render_penjualan():
+    st.subheader("Analisis penjualan tingkat usaha")
+    st.caption("Tab ini menganalisis data transaksi satu usaha dan tidak dipengaruhi pengaturan di sidebar.")
+    sumber = st.radio("Sumber data", ["Contoh data simulasi", "Unggah data sendiri"], horizontal=True, key="jual_sumber")
 
-    st.markdown(
-        '<div class="custom-divider"></div>',
-        unsafe_allow_html=True,
-    )
-
-    # Informasi data
-    st.markdown(
-        """
-        <div style="text-align:center; padding:8px 0;">
-            <p style="color:#64748b; font-size:11px; margin:0;">
-                Data sampel berdasarkan pola BPS Indonesia<br>
-                Periode 2019 – 2024
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-# ============================================================
-# APPLY FILTERS
-# ============================================================
-
-filtered = df[
-    (df["tahun"] >= selected_tahun[0]) &
-    (df["tahun"] <= selected_tahun[1])
-].copy()
-
-if selected_provinsi:
-    filtered = filtered[
-        filtered["provinsi"].isin(selected_provinsi)
-    ]
-
-# ============================================================
-# DASHBOARD HEADER
-# ============================================================
-st.markdown(
-    """
-    <div class="dashboard-title">
-        <h1>Dashboard Analisis UMKM Indonesia</h1>
-        <p>Visualisasi data komprehensif Usaha Mikro, Kecil, dan Menengah di Indonesia</p>
-    </div>
-    <div class="custom-divider"></div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ============================================================
-# ACTIVE FILTER BADGE BAR
-# ============================================================
-tahun_badge = f"📅 {selected_tahun[0]} – {selected_tahun[1]}"
-
-if selected_provinsi:
-    if len(selected_provinsi) <= 2:
-        prov_badge = "🗺️ " + ", ".join(selected_provinsi)
+    if sumber == "Contoh data simulasi":
+        st.warning(
+            "Data ini adalah SIMULASI sebuah kedai kopi selama satu tahun, dibuat untuk mendemonstrasikan fitur. "
+            "Pola seperti ramai di akhir pekan sudah ditanam pada generator, sehingga bukan temuan nyata. "
+            "Unggah data transaksi usaha yang sebenarnya untuk analisis yang bermakna."
+        )
+        raw = _contoh()
+        peta = dict(kol_waktu="waktu", kol_produk="produk", kol_jumlah="jumlah", kol_nilai="harga_satuan",
+                    nilai_adalah="Harga satuan", kol_id="id_transaksi", kol_kategori="kategori", dayfirst=False)
     else:
-        prov_badge = f"🗺️ {len(selected_provinsi)} Provinsi"
-else:
-    prov_badge = "🗺️ Semua Provinsi"
+        berkas = st.file_uploader("Berkas transaksi (CSV atau Excel)", type=["csv", "xlsx", "xls"], key="jual_file")
+        if berkas is None:
+            st.info(
+                "Format yang dibutuhkan: satu baris untuk setiap produk yang terjual, dengan kolom tanggal/waktu, "
+                "nama produk, jumlah, dan harga (satuan atau total). Kolom ID transaksi dan kategori bersifat "
+                "opsional. Contoh format ada di `data/contoh_penjualan_simulasi.csv`."
+            )
+            return
+        try:
+            raw = _baca(berkas.name, berkas.getvalue())
+        except Exception as e:  # noqa: BLE001
+            st.error(f"Berkas tidak dapat dibaca: {e}")
+            return
+        kol = list(raw.columns)
+        opsi = ["(tidak ada)"] + kol
+        with st.expander("Pemetaan kolom", expanded=True):
+            c1, c2, c3 = st.columns(3)
+            kw = c1.selectbox("Tanggal/waktu", kol, index=_tebak(kol, ["tanggal", "tgl", "date", "waktu", "time"]))
+            kp = c2.selectbox("Produk", kol, index=_tebak(kol, ["produk", "item", "barang", "menu", "product"]))
+            kj = c3.selectbox("Jumlah", kol, index=_tebak(kol, ["jumlah", "qty", "quantity", "kuantitas"]))
+            c4, c5, c6 = st.columns(3)
+            kn = c4.selectbox("Kolom harga", kol, index=_tebak(kol, ["harga", "price", "total", "subtotal", "nilai"]))
+            na = c5.radio("Kolom harga berisi", ["Harga satuan", "Total nilai per baris"])
+            ki = c6.selectbox("ID transaksi (opsional)", opsi, index=_tebak(kol, ["id", "nota", "invoice", "transaksi"], True))
+            kk = c6.selectbox("Kategori (opsional)", opsi, index=_tebak(kol, ["kategori", "category", "jenis"], True))
+            dayfirst = st.checkbox("Tanggal berformat hari/bulan/tahun (mis. 15/03/2026)", value=True)
+        peta = dict(kol_waktu=kw, kol_produk=kp, kol_jumlah=kj, kol_nilai=kn, nilai_adalah=na,
+                    kol_id=None if ki == "(tidak ada)" else ki, kol_kategori=None if kk == "(tidak ada)" else kk,
+                    dayfirst=dayfirst)
 
-total_rows = len(filtered)
+    d, lap = pj.bersihkan(raw, **peta)
+    with st.expander("Laporan pembersihan data"):
+        st.dataframe(pd.DataFrame.from_dict(lap, orient="index", columns=["Jumlah baris"]), width="stretch")
+        st.download_button("Unduh data bersih (CSV)", d.to_csv(index=False).encode("utf-8"),
+                           file_name="penjualan_bersih.csv", mime="text/csv")
+    if d.empty:
+        st.error("Tidak ada baris valid setelah pembersihan. Periksa pemetaan kolom dan format tanggal.")
+        return
 
-st.markdown(
-    f"""
-    <div class="filter-badge-bar">
-        <span class="filter-badge-label">🔎 Filter Aktif:</span>
-        <span class="filter-badge year">{tahun_badge}</span>
-        <span class="filter-badge prov">{prov_badge}</span>
-        <span style="margin-left:auto; font-size:11px; color:#64748b; font-weight:500;">
-            {total_rows:,} baris data
-        </span>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-# ============================================================
-# KPI CARDS
-# ============================================================
-total_umkm = filtered["jumlah_umkm"].sum()
-total_tk = filtered["tenaga_kerja"].sum()
-avg_omzet = filtered["omzet_juta"].mean() if not filtered.empty else 0
-avg_growth = filtered["pertumbuhan_pct"].mean() if not filtered.empty else 0
+    r = pj.ringkasan(d)
+    pp = pj.per_produk(d)
+    rh = pj.rata_per_hari(d)
 
-# Hitung delta dari tahun terakhir vs tahun sebelumnya (jika ada)
-latest_year = filtered["tahun"].max() if not filtered.empty else 0
-prev_year = latest_year - 1
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("Total omzet", "Rp " + fmt_id(r["omzet"]))
+    k2.metric("Jumlah transaksi", fmt_id(r["transaksi"]))
+    k3.metric("Rata-rata nilai transaksi", "Rp " + fmt_id(r["nilai_per_transaksi"]))
+    k4.metric("Unit terjual", fmt_id(r["unit"]))
+    st.caption(f"Periode data: {r['awal']:%d/%m/%Y} sampai {r['akhir']:%d/%m/%Y}.")
 
-df_latest = filtered[filtered["tahun"] == latest_year]
-df_prev = filtered[filtered["tahun"] == prev_year]
-
-if not df_prev.empty and not df_latest.empty:
-    delta_umkm = (
-        (df_latest["jumlah_umkm"].sum() - df_prev["jumlah_umkm"].sum())
-        / df_prev["jumlah_umkm"].sum()
-        * 100
-    )
-    delta_tk = (
-        (df_latest["tenaga_kerja"].sum() - df_prev["tenaga_kerja"].sum())
-        / df_prev["tenaga_kerja"].sum()
-        * 100
-    )
-    delta_omzet = (
-        (df_latest["omzet_juta"].mean() - df_prev["omzet_juta"].mean())
-        / df_prev["omzet_juta"].mean()
-        * 100
-    )
-else:
-    delta_umkm = delta_tk = delta_omzet = 0.0
-
-growth_class_umkm = "positive" if delta_umkm >= 0 else "negative"
-growth_class_tk = "positive" if delta_tk >= 0 else "negative"
-growth_class_omzet = "positive" if delta_omzet >= 0 else "negative"
-growth_class_avg = "positive" if avg_growth >= 0 else "negative"
-
-arrow_umkm = "↑" if delta_umkm >= 0 else "↓"
-arrow_tk = "↑" if delta_tk >= 0 else "↓"
-arrow_omzet = "↑" if delta_omzet >= 0 else "↓"
-arrow_avg = "↑" if avg_growth >= 0 else "↓"
-
-# Progress bars: relative to max across KPIs
-umkm_progress = min(100, int(abs(delta_umkm) * 5)) if delta_umkm else 60
-tk_progress = min(100, int(abs(delta_tk) * 5)) if delta_tk else 55
-omzet_progress = min(100, int(abs(delta_omzet) * 5)) if delta_omzet else 70
-growth_progress = min(100, int(abs(avg_growth) * 5)) if avg_growth else 50
-
-st.markdown(
-    f"""
-    <div class="kpi-container">
-        <div class="kpi-card">
-            <span class="kpi-icon">🏢</span>
-            <div class="kpi-label">Total UMKM</div>
-            <div class="kpi-value">{format_number(total_umkm)}</div>
-            <div class="kpi-delta {growth_class_umkm}">{arrow_umkm} {abs(delta_umkm):.1f}% vs tahun lalu</div>
-            <div class="kpi-progress-bg"><div class="kpi-progress-fill" style="width:{umkm_progress}%"></div></div>
-        </div>
-        <div class="kpi-card">
-            <span class="kpi-icon">👥</span>
-            <div class="kpi-label">Total Tenaga Kerja</div>
-            <div class="kpi-value">{format_number(total_tk)}</div>
-            <div class="kpi-delta {growth_class_tk}">{arrow_tk} {abs(delta_tk):.1f}% vs tahun lalu</div>
-            <div class="kpi-progress-bg"><div class="kpi-progress-fill" style="width:{tk_progress}%"></div></div>
-        </div>
-        <div class="kpi-card">
-            <span class="kpi-icon">💰</span>
-            <div class="kpi-label">Rata-rata Omzet</div>
-            <div class="kpi-value">{format_rupiah(avg_omzet)}</div>
-            <div class="kpi-delta {growth_class_omzet}">{arrow_omzet} {abs(delta_omzet):.1f}% vs tahun lalu</div>
-            <div class="kpi-progress-bg"><div class="kpi-progress-fill" style="width:{omzet_progress}%"></div></div>
-        </div>
-        <div class="kpi-card">
-            <span class="kpi-icon">📈</span>
-            <div class="kpi-label">Pertumbuhan Rata-rata</div>
-            <div class="kpi-value">{avg_growth:+.1f}%</div>
-            <div class="kpi-delta {growth_class_avg}">{arrow_avg} Year-over-Year</div>
-            <div class="kpi-progress-bg"><div class="kpi-progress-fill" style="width:{growth_progress}%"></div></div>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ============================================================
-# SECTION 1: PETA CHOROPLETH INDONESIA
-# ============================================================
-st.markdown(
-    '<div class="section-header">🗺️ Peta Sebaran UMKM per Provinsi</div>',
-    unsafe_allow_html=True,
-)
-
-map_insight = generate_insight(filtered, "distribusi")
-st.markdown(
-    f'<div class="insight-box"><div class="insight-title">💡 Insight Otomatis</div>'
-    f'<p>{map_insight}</p></div>',
-    unsafe_allow_html=True,
-)
-
-with st.spinner("Memuat peta Indonesia..."):
-    geojson_data = load_indonesia_geojson()
-
-if geojson_data is not None:
-    map_data = (
-        filtered.groupby("provinsi", as_index=False)["jumlah_umkm"].sum()
-    )
-
-    # Mapping nama provinsi agar sesuai dengan GeoJSON
-    prov_name_map = {
-        "DKI Jakarta": "Jakarta Raya",
-        "DI Yogyakarta": "Di Yogyakarta",
-        "Kepulauan Bangka Belitung": "Bangka Belitung",
-        "Nusa Tenggara Barat": "Nusa Tenggara Barat",
-        "Nusa Tenggara Timur": "Nusa Tenggara Timur",
-        "Kalimantan Utara": "Kalimantan Utara",
-    }
-    map_data["provinsi_geo"] = map_data["provinsi"].replace(prov_name_map)
-
-    # Build choropleth
-    fig_map = px.choropleth(
-        map_data,
-        geojson=geojson_data,
-        locations="provinsi_geo",
-        featureidkey="properties.state",
-        color="jumlah_umkm",
-        color_continuous_scale=[
-            [0.0, "#0f172a"],
-            [0.2, "#312e81"],
-            [0.5, "#6366f1"],
-            [0.8, "#22d3ee"],
-            [1.0, "#10b981"],
-        ],
-        hover_name="provinsi",
-        hover_data={"jumlah_umkm": ":,.0f", "provinsi_geo": False},
-        labels={"jumlah_umkm": "Jumlah UMKM"},
-    )
-    fig_map.update_geos(
-        fitbounds="locations",
-        visible=False,
-        bgcolor="rgba(0,0,0,0)",
-    )
-    fig_map.update_layout(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Inter, sans-serif", color=THEME['font_color'], size=12),
-        height=480,
-        margin=dict(l=0, r=0, t=10, b=0),
-        hoverlabel=dict(
-            bgcolor=THEME['hover_bg'],
-            bordercolor="#6366f1",
-            font=dict(family="Inter", color=THEME['hover_font']),
-        ),
-        coloraxis_colorbar=dict(
-            title="Jumlah UMKM",
-            thickness=14,
-            len=0.6,
-            tickfont=dict(size=10, color=THEME['font_color']),
-            title_font=dict(size=11, color=THEME['font_color']),
-        ),
-    )
-    fig_map.update_traces(
-        marker_line_color="rgba(99,102,241,0.3)",
-        marker_line_width=0.8,
-    )
-
-    st.markdown('<div class="chart-container">', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="chart-title">🌐 Peta Choropleth — Konsentrasi UMKM per Provinsi</div>',
-        unsafe_allow_html=True,
-    )
-    st.plotly_chart(fig_map, use_container_width=True, config={"displayModeBar": False})
-    st.markdown("</div>", unsafe_allow_html=True)
-else:
-    st.info("ℹ️ Peta tidak dapat dimuat (periksa koneksi internet). Menampilkan chart alternatif.")
-
-# ============================================================
-# SECTION 2: DISTRIBUSI WILAYAH & SEKTOR
-# ============================================================
-st.markdown(
-    '<div class="section-header">📊 Distribusi Wilayah & Sektor Usaha</div>',
-    unsafe_allow_html=True,
-)
-
-col1, col2 = st.columns([3, 2])
-
-with col1:
-    st.markdown(
-        '<div class="chart-container">'
-        '<div class="chart-title">📊 Top 10 Provinsi — Jumlah UMKM</div>',
-        unsafe_allow_html=True,
-    )
-
-    prov_data = (
-        filtered.groupby("provinsi", as_index=False)["jumlah_umkm"]
-        .sum()
-        .sort_values("jumlah_umkm", ascending=True)
-        .tail(10)
-    )
-
-    fig_bar = px.bar(
-        prov_data,
-        x="jumlah_umkm",
-        y="provinsi",
-        orientation="h",
-        color="jumlah_umkm",
-        color_continuous_scale=["#312e81", "#6366f1", "#22d3ee"],
-        labels={"jumlah_umkm": "Jumlah UMKM", "provinsi": ""},
-    )
-    fig_bar.update_layout(**make_layout(
-        height=400,
-        showlegend=False,
-        coloraxis_showscale=False,
-    ))
-    fig_bar.update_traces(
-        marker_line_width=0,
-        hovertemplate="<b>%{y}</b><br>Jumlah: %{x:,.0f}<extra></extra>",
-    )
-    st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
-    st.markdown("</div>", unsafe_allow_html=True)
-
-with col2:
-    st.markdown(
-        '<div class="chart-container">'
-        '<div class="chart-title">🍩 Distribusi Sektor Usaha</div>',
-        unsafe_allow_html=True,
-    )
-
-    sektor_data = (
-        filtered.groupby("sektor", as_index=False)["jumlah_umkm"].sum()
-    )
-
-    fig_donut = px.pie(
-        sektor_data,
-        values="jumlah_umkm",
-        names="sektor",
-        hole=0.55,
-        color="sektor",
-        color_discrete_map=SEKTOR_COLORS,
-    )
-    fig_donut.update_layout(**make_layout(
-        height=400,
-        legend=dict(
-            orientation="v",
-            yanchor="middle",
-            y=0.5,
-            xanchor="left",
-            x=1.05,
-            font=dict(size=11),
-        ),
-    ))
-    fig_donut.update_traces(
-        textinfo="percent+label",
-        textfont_size=11,
-        textfont_color="#e2e8f0",
-        hovertemplate="<b>%{label}</b><br>Jumlah: %{value:,.0f}<br>Persentase: %{percent}<extra></extra>",
-        marker=dict(line=dict(color=THEME['marker_line'], width=2)),
-    )
-    st.plotly_chart(fig_donut, use_container_width=True, config={"displayModeBar": False})
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# ============================================================
-# SECTION 3: TREN & PERTUMBUHAN
-# ============================================================
-st.markdown(
-    '<div class="section-header">📈 Tren & Pertumbuhan Tahunan</div>',
-    unsafe_allow_html=True,
-)
-
-tren_insight = generate_insight(filtered, "tren")
-st.markdown(
-    f'<div class="insight-box"><div class="insight-title">💡 Insight Otomatis</div>'
-    f'<p>{tren_insight}</p></div>',
-    unsafe_allow_html=True,
-)
-
-col3, col4 = st.columns(2)
-
-with col3:
-    st.markdown(
-        '<div class="chart-container">'
-        '<div class="chart-title">📈 Tren Jumlah UMKM per Tahun</div>',
-        unsafe_allow_html=True,
-    )
-
-    trend_data = (
-        filtered.groupby("tahun", as_index=False)
-        .agg(total_umkm=("jumlah_umkm", "sum"), total_tk=("tenaga_kerja", "sum"))
-    )
-
-    fig_trend = go.Figure()
-    fig_trend.add_trace(
-        go.Scatter(
-            x=trend_data["tahun"],
-            y=trend_data["total_umkm"],
-            mode="lines+markers",
-            name="Jumlah UMKM",
-            line=dict(color="#6366f1", width=3, shape="spline"),
-            marker=dict(size=10, color="#6366f1", line=dict(width=2, color=THEME['marker_line'])),
-            fill="tozeroy",
-            fillcolor="rgba(99, 102, 241, 0.08)",
-            hovertemplate="<b>%{x}</b><br>UMKM: %{y:,.0f}<extra></extra>",
-        )
-    )
-    fig_trend.update_layout(**make_layout(
-        height=380,
-        showlegend=False,
-        xaxis=dict(dtick=1, title=""),
-        yaxis=dict(title="Jumlah UMKM", title_font=dict(size=12)),
-    ))
-    st.plotly_chart(fig_trend, use_container_width=True, config={"displayModeBar": False})
-    st.markdown("</div>", unsafe_allow_html=True)
-
-with col4:
-    st.markdown(
-        '<div class="chart-container">'
-        '<div class="chart-title">📊 Rata-rata Pertumbuhan per Tahun (%)</div>',
-        unsafe_allow_html=True,
-    )
-
-    growth_data = (
-        filtered.groupby("tahun", as_index=False)["pertumbuhan_pct"].mean()
-    )
-
-    colors_growth = [
-        "#10b981" if v >= 0 else "#f43f5e" for v in growth_data["pertumbuhan_pct"]
+    n80 = int((pp["kumulatif_pct"] < 80).sum() + 1)
+    temuan = [
+        f"**{pp.iloc[0]['produk']}** adalah penyumbang omzet terbesar ({fmt_id(pp.iloc[0]['porsi_pct'], 1)}%).",
+        f"{n80} dari {len(pp)} produk ({fmt_id(n80 / len(pp) * 100, 0)}%) menghasilkan 80% omzet.",
+        f"Rata-rata omzet harian tertinggi jatuh pada hari {rh.idxmax()} (Rp {fmt_id(rh.max())}), "
+        f"{fmt_id(rh.max() / rh.min(), 2)} kali hari terendah ({rh.idxmin()}).",
     ]
+    if pj.ada_jam(d):
+        jam = int(pj.pola_hari_jam(d).sum().idxmax())
+        temuan.append(f"Jam tersibuk berdasarkan jumlah transaksi adalah pukul {jam:02d}.00 sampai {jam + 1:02d}.00.")
+    st.info("**Ringkasan temuan**\n\n" + "\n".join(f"- {t}" for t in temuan))
 
-    fig_growth = go.Figure()
-    fig_growth.add_trace(
-        go.Bar(
-            x=growth_data["tahun"],
-            y=growth_data["pertumbuhan_pct"],
-            marker_color=colors_growth,
-            marker_line_width=0,
-            hovertemplate="<b>%{x}</b><br>Pertumbuhan: %{y:.1f}%<extra></extra>",
+    # ---- Tren
+    st.subheader("Tren penjualan")
+    gran = st.radio("Granularitas", ["Harian", "Mingguan", "Bulanan"], horizontal=True, key="jual_gran")
+    t = pj.tren(d, gran)
+    if gran == "Harian":
+        fig = px.line(t, x="periode", y=["omzet", "rata_7_hari"], title="Omzet harian dan rata-rata bergerak 7 hari")
+        fig.data[0].update(name="Omzet harian", line=dict(color="#A9B8C9", width=1))
+        fig.data[1].update(name="Rata-rata 7 hari", line=dict(color=BIRU, width=2.4))
+    elif gran == "Mingguan":
+        fig = px.line(t, x="periode", y="omzet", color_discrete_sequence=[BIRU], title="Omzet mingguan")
+    else:
+        fig = px.bar(t, x="periode", y="omzet", color_discrete_sequence=[BIRU], title="Omzet bulanan")
+        fig.update_traces(marker_line_width=0)
+    fig.update_layout(xaxis_title="", yaxis_title="Omzet (Rp)")
+    tampil(fig, 400)
+    if gran != "Harian":
+        st.caption("Periode pertama dan terakhir bisa belum penuh sehingga tampak lebih rendah.")
+
+    # ---- Produk
+    st.subheader("Kinerja produk")
+    ukuran = st.selectbox("Peringkat produk berdasarkan", ["Omzet", "Unit terjual"], key="jual_ukuran")
+    kolom_u = "omzet" if ukuran == "Omzet" else "unit"
+    a, b = st.columns([3, 2])
+    with a:
+        top = pp.nlargest(10, kolom_u).sort_values(kolom_u)
+        fig = px.bar(top, x=kolom_u, y="produk", orientation="h", color_discrete_sequence=[BIRU],
+                     title=f"10 produk teratas menurut {ukuran.lower()}")
+        fig.update_traces(texttemplate="%{x:,.0f}", textposition="outside", cliponaxis=False, marker_line_width=0)
+        fig.update_layout(xaxis_title="Rp" if kolom_u == "omzet" else "unit", yaxis_title="", bargap=0.35)
+        fig.update_yaxes(showgrid=False)
+        tampil(fig, 420)
+    with b:
+        pareto = pp.assign(peringkat=range(1, len(pp) + 1))
+        fig = px.line(pareto, x="peringkat", y="kumulatif_pct", markers=True, color_discrete_sequence=[BIRU],
+                      title="Kontribusi kumulatif omzet (Pareto)")
+        fig.add_hline(y=80, line_dash="dash", line_color=MERAH, annotation_text="80%")
+        fig.update_layout(xaxis_title="Peringkat produk", yaxis_title="Omzet kumulatif (%)", yaxis_range=[0, 102])
+        tampil(fig, 420)
+    c1, c2 = st.columns([2, 3])
+    with c1:
+        if d["kategori"].nunique() > 1:
+            kat = d.groupby("kategori", as_index=False)["omzet"].sum()
+            fig = px.pie(kat, names="kategori", values="omzet", hole=0.55, color_discrete_sequence=PALET,
+                         title="Porsi omzet menurut kategori")
+            fig.update_traces(textinfo="percent", marker=dict(line=dict(color="white", width=2)))
+            tampil(fig, 340)
+    with c2:
+        tabel = pp.rename(columns={"produk": "Produk", "omzet": "Omzet (Rp)", "unit": "Unit",
+                                   "transaksi": "Transaksi", "porsi_pct": "Porsi (%)", "kumulatif_pct": "Kumulatif (%)"})
+        st.dataframe(tabel.assign(**{"Omzet (Rp)": tabel["Omzet (Rp)"].map(fmt_id),
+                                     "Unit": tabel["Unit"].map(fmt_id), "Transaksi": tabel["Transaksi"].map(fmt_id),
+                                     "Porsi (%)": tabel["Porsi (%)"].map(lambda v: fmt_id(v, 1)),
+                                     "Kumulatif (%)": tabel["Kumulatif (%)"].map(lambda v: fmt_id(v, 1))}),
+                     width="stretch", height=340, hide_index=True)
+
+    # ---- Pola waktu
+    st.subheader("Pola waktu")
+    a, b = st.columns(2)
+    with a:
+        rhh = rh.reindex([h for h in pj.HARI if h in rh.index])
+        fig = px.bar(x=rhh.index, y=rhh.values, color_discrete_sequence=[BIRU], title="Rata-rata omzet menurut hari")
+        fig.update_traces(marker_line_width=0)
+        fig.update_layout(xaxis_title="", yaxis_title="Omzet rata-rata per hari (Rp)", bargap=0.35)
+        tampil(fig, 400)
+    with b:
+        if pj.ada_jam(d):
+            m = pj.pola_hari_jam(d)
+            fig = px.imshow(m, labels=dict(x="Jam", y="Hari", color="Transaksi"), aspect="auto",
+                            color_continuous_scale=[[0, "#FFFFFF"], [1, BIRU]], title="Jumlah transaksi menurut hari dan jam")
+            fig.update_xaxes(dtick=1, showgrid=False)
+            fig.update_yaxes(showgrid=False)
+            tampil(fig, 400)
+        else:
+            st.info("Data tidak memuat informasi jam, sehingga pola per jam tidak ditampilkan.")
+
+    # ---- Prakiraan
+    st.subheader("Prakiraan omzet harian")
+    horizon = st.slider("Horizon prakiraan (hari)", 7, 60, 14, key="jual_horizon")
+    seri = pj.harian(d)
+    hasil = pj.prakiraan(seri, horizon)
+    if hasil is None:
+        st.info("Prakiraan membutuhkan minimal sekitar 12 minggu data harian. Data saat ini belum cukup.")
+    else:
+        fc = hasil["prakiraan"]
+        hist = seri.iloc[-90:]
+        fig = go.Figure()
+        fig.add_scatter(x=hist.index, y=hist.values, mode="lines", name="Aktual", line=dict(color=BIRU, width=1.6))
+        fig.add_scatter(x=fc.index, y=fc["batas_atas"], mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip")
+        fig.add_scatter(x=fc.index, y=fc["batas_bawah"], mode="lines", line=dict(width=0), fill="tonexty",
+                        fillcolor="rgba(181,80,60,0.15)", name="Interval kira-kira 95%", hoverinfo="skip")
+        fig.add_scatter(x=fc.index, y=fc["prakiraan"], mode="lines", name="Prakiraan",
+                        line=dict(color=MERAH, width=2, dash="dash"))
+        fig.update_layout(title=f"Prakiraan {horizon} hari ke depan (90 hari terakhir sebagai latar)",
+                          xaxis_title="", yaxis_title="Omzet harian (Rp)")
+        tampil(fig, 420)
+
+        mt = hasil["metrik"].copy()
+        mt["MAE"] = mt["MAE"].map(lambda v: "Rp " + fmt_id(v))
+        mt["WAPE (%)"] = mt["WAPE (%)"].map(lambda v: fmt_id(v, 1))
+        st.markdown("**Evaluasi pada 28 hari terakhir** (tidak dipakai untuk melatih model)")
+        st.dataframe(mt, width="stretch")
+        lebih = hasil["metrik"].loc["Holt-Winters", "WAPE (%)"] < hasil["metrik"].loc["Baseline musiman-naif", "WAPE (%)"]
+        st.caption(
+            "Model: Holt-Winters (tren teredam dan musiman mingguan). Baseline musiman-naif mengulang pola 7 hari "
+            "terakhir. "
+            + ("Model lebih akurat daripada baseline pada data uji. " if lebih else
+               "Model tidak lebih akurat daripada baseline pada data uji, sehingga prakiraannya perlu dipakai dengan hati-hati. ")
+            + "Interval dihitung kasar dari simpangan baku residual."
         )
-    )
-    fig_growth.add_hline(
-        y=0,
-        line_dash="dot",
-        line_color="rgba(148,163,184,0.3)",
-        line_width=1,
-    )
-    fig_growth.update_layout(**make_layout(
-        height=380,
-        showlegend=False,
-        xaxis=dict(dtick=1, title=""),
-        yaxis=dict(title="Pertumbuhan (%)", title_font=dict(size=12)),
-    ))
-    st.plotly_chart(fig_growth, use_container_width=True, config={"displayModeBar": False})
-    st.markdown("</div>", unsafe_allow_html=True)
 
-# ============================================================
-# SECTION 4: PERBANDINGAN SKALA & SEKTOR
-# ============================================================
-st.markdown(
-    '<div class="section-header">⚖️ Perbandingan Skala & Sektor Usaha</div>',
-    unsafe_allow_html=True,
+
+# ---------------------------------------------------------------- Kesimpulan
+def render_kesimpulan():
+    def pct(v):
+        return f"{'+' if v > 0 else ''}{fmt_id(v, 1)}%"
+
+    nas = perubahan_nasional(prov)
+    marg = {}
+    for th in (2024, 2025):
+        s = prov[prov["tahun"] == th]
+        marg[th] = (s["pendapatan_000"].sum() - s["pengeluaran_000"].sum()) / s["pendapatan_000"].sum() * 100
+    p25 = prov[prov["tahun"] == 2025]
+    jawa = p25[p25["wilayah"] == "Jawa"]
+    top3 = kbli[kbli["tahun"] == 2025].nlargest(3, "usaha")
+    model, _, _ = regresi(prov)
+    b_d, b_t = model.params["ln_dibayar"], model.params["ln_tdk_dibayar"]
+    sil = {th: klaster(prov[prov["tahun"] == th], 3)[1][3] for th in (2024, 2025)}
+
+    st.subheader("Temuan utama dari data nasional (BPS)")
+    st.markdown(f"""
+1. **Skala tetap, tenaga kerja menyusut.** Jumlah usaha {pct(nas.loc['Jumlah usaha', 'perubahan_pct'])}, jumlah pekerja
+   {pct(nas.loc['Pekerja (total)', 'perubahan_pct'])}, pendapatan {pct(nas.loc['Pendapatan (000 Rp)', 'perubahan_pct'])}, pengeluaran
+   {pct(nas.loc['Pengeluaran (000 Rp)', 'perubahan_pct'])} (2024 ke 2025). Margin kasar bergeser dari {fmt_id(marg[2024], 1)}% ke {fmt_id(marg[2025], 1)}%.
+2. **Terkonsentrasi di Jawa.** Pulau Jawa menyumbang {fmt_id(jawa['usaha'].sum() / p25['usaha'].sum() * 100, 1)}% usaha dan
+   {fmt_id(jawa['pendapatan_000'].sum() / p25['pendapatan_000'].sum() * 100, 1)}% pendapatan pada 2025.
+3. **Didominasi beberapa jenis industri.** {', '.join(top3['sektor'])} mencakup {fmt_id(top3['usaha'].sum() / kbli[kbli['tahun'] == 2025]['usaha'].sum() * 100, 1)}% usaha pada 2025.
+4. **Pendapatan tumbuh kira-kira sebanding dengan tenaga kerja.** Elastisitas terhadap pekerja dibayar {fmt_id(b_d, 2)} dan terhadap pekerja
+   tidak dibayar {fmt_id(b_t, 2)} (jumlah {fmt_id(b_d + b_t, 2)}). Ini asosiasi antar provinsi, bukan sebab-akibat.
+5. **Pengelompokan provinsi lemah.** Silhouette K-Means (k = 3) hanya {fmt_id(sil[2024], 2)} (2024) dan {fmt_id(sil[2025], 2)} (2025), sehingga
+   klaster dibaca sebagai eksplorasi, bukan kelompok yang tegas.
+""")
+
+    st.subheader("Implikasi bagi pelaku UMKM")
+    st.markdown("""
+- Jenis industri berbeda jauh dalam produktivitas per pekerja dan margin (tab Jenis Industri), sehingga pemilihan jenis usaha
+  dan produk berpengaruh pada hasil.
+- Pendapatan yang berasosiasi hampir sebanding dengan tenaga kerja menunjukkan bahwa peningkatan skala tanpa perbaikan
+  produktivitas tidak otomatis menaikkan pendapatan per pekerja.
+- Di tingkat usaha, pemantauan rutin atas produk penyumbang omzet, hari dan jam ramai, serta prakiraan permintaan
+  (tab Penjualan Usaha) membantu perencanaan stok dan jadwal kerja.
+""")
+
+    st.subheader("Batasan")
+    st.markdown("""
+- Data BPS hanya mencakup industri pengolahan skala mikro dan kecil, dari survei sampel, dan hanya dua tahun.
+- Hasil regresi dan klaster bersifat asosiatif dan eksploratif.
+- Modul penjualan usaha memakai data simulasi kecuali pengguna mengunggah data transaksi sendiri.
+""")
+
+# ---------------------------------------------------------------- Sidebar
+st.sidebar.header("Pengaturan data nasional (BPS)")
+tahun = st.sidebar.selectbox("Tahun", [2025, 2024])
+wilayah_semua = sorted(prov["wilayah"].unique())
+wilayah = st.sidebar.multiselect("Wilayah", wilayah_semua, default=wilayah_semua)
+if not wilayah:
+    st.sidebar.warning("Pilih minimal satu wilayah. Sementara semua wilayah dipakai.")
+    wilayah = wilayah_semua
+st.sidebar.caption(
+    "Pengaturan ini berlaku pada tab Ringkasan Nasional dan Eksplorasi Data (tahun juga pada Jenis Industri). "
+    "Tab Model dan Klaster memakai seluruh 38 provinsi. Tab Penjualan Usaha tidak terpengaruh."
 )
 
-skala_insight = generate_insight(filtered, "skala")
-st.markdown(
-    f'<div class="insight-box"><div class="insight-title">💡 Insight Otomatis</div>'
-    f'<p>{skala_insight}</p></div>',
-    unsafe_allow_html=True,
+p_tahun = prov[(prov["tahun"] == tahun) & (prov["wilayah"].isin(wilayah))]
+k_tahun = kbli[kbli["tahun"] == tahun]
+
+# ---------------------------------------------------------------- Judul
+st.title("Dashboard Analisis UMKM Indonesia")
+st.markdown("**Dua lapisan analisis: (1) konteks nasional UMKM sektor industri pengolahan dari data BPS 2024-2025, dan (2) analisis penjualan tingkat usaha.**")
+st.caption(
+    "Sumber: BPS, Profil Industri Mikro dan Kecil 2024 dan 2025. Survei sampel; cakupan industri pengolahan "
+    "dengan 1 sampai 19 pekerja. Usaha perdagangan dan jasa tidak termasuk."
 )
 
-col5, col6 = st.columns(2)
+(tab_jual, tab_ringkas, tab_eda, tab_sektor, tab_ubah, tab_model, tab_simpul, tab_data) = st.tabs(
+    ["Penjualan Usaha", "Ringkasan Nasional", "Eksplorasi Data", "Jenis Industri", "Perubahan 2024-2025",
+     "Model dan Klaster", "Kesimpulan", "Data dan Metodologi"]
+)
 
-with col5:
+with tab_jual:
+    render_penjualan()
+
+with tab_simpul:
+    render_kesimpulan()
+
+# ================================================================ 1. Ringkasan
+with tab_ringkas:
+    kolom_kpi = ["usaha", "pekerja_total", "pendapatan_triliun", "pengeluaran_triliun"]
+    tot = p_tahun[kolom_kpi].sum()
+    margin = (tot["pendapatan_triliun"] - tot["pengeluaran_triliun"]) / tot["pendapatan_triliun"] * 100
+    pembanding = None
+    if tahun == 2025:
+        p0 = prov[(prov["tahun"] == 2024) & (prov["wilayah"].isin(wilayah))]
+        pembanding = p0[kolom_kpi].sum()
+
+    def delta(kol):
+        if pembanding is None:
+            return None
+        return f"{fmt_id((tot[kol] / pembanding[kol] - 1) * 100, 1)}% vs 2024"
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Jumlah usaha", fmt_id(tot["usaha"]), delta("usaha"))
+    c2.metric("Jumlah pekerja", fmt_id(tot["pekerja_total"]), delta("pekerja_total"))
+    c3.metric("Pendapatan (Rp triliun)", fmt_id(tot["pendapatan_triliun"], 1), delta("pendapatan_triliun"))
+    c4.metric("Margin kasar", f"{fmt_id(margin, 1)}%", help="(Pendapatan - pengeluaran) / pendapatan")
+
+    st.write("")
+    pilih = st.selectbox("Tampilkan berdasarkan", list(METRIK), key="rank_metrik")
+    kol, sat, fmt = METRIK[pilih]
+
+    kiri, kanan = st.columns([3, 2])
+    with kiri:
+        top = p_tahun.nlargest(10, kol).sort_values(kol)
+        fig = px.bar(top, x=kol, y="provinsi", orientation="h", color_discrete_sequence=[BIRU],
+                     title=f"10 provinsi teratas: {pilih}, {tahun}")
+        fig.update_traces(texttemplate="%{x:" + fmt + "}", textposition="outside", cliponaxis=False,
+                          marker_line_width=0)
+        fig.update_layout(xaxis_title=sat, yaxis_title="", bargap=0.35)
+        fig.update_yaxes(showgrid=False)
+        tampil(fig, 440)
+    with kanan:
+        porsi = p_tahun.groupby("wilayah", as_index=False)[kol].sum().sort_values(kol, ascending=False)
+        fig = px.pie(porsi, names="wilayah", values=kol, hole=0.55, color_discrete_sequence=PALET,
+                     title=f"Porsi menurut wilayah")
+        fig.update_traces(textinfo="percent", sort=False, marker=dict(line=dict(color="white", width=2)))
+        tampil(fig, 440)
+
+    if "Jawa" in wilayah:
+        jawa = p_tahun[p_tahun["wilayah"] == "Jawa"][kol].sum() / p_tahun[kol].sum() * 100
+        st.caption(f"Pada filter yang dipilih, Pulau Jawa menyumbang {fmt_id(jawa, 1)}% dari {pilih.lower()} tahun {tahun}.")
+
+# ================================================================ 2. EDA
+with tab_eda:
+    st.subheader("Statistik deskriptif antar provinsi")
+    ringkas = p_tahun[list(INDIKATOR.values())].describe().T
+    ringkas.index = list(INDIKATOR.keys())
+    ringkas = ringkas.rename(columns={"count": "n", "mean": "Rata-rata", "std": "Simpangan baku", "min": "Min",
+                                      "25%": "Q1", "50%": "Median", "75%": "Q3", "max": "Maks"})
+    st.dataframe(tabel_fmt(ringkas), width="stretch")
+
+    a, b = st.columns(2)
+    with a:
+        ind = st.selectbox("Distribusi indikator", list(INDIKATOR), key="eda_ind")
+        fig = px.box(p_tahun, y=INDIKATOR[ind], points="all", hover_name="provinsi",
+                     color_discrete_sequence=[BIRU], title=f"Sebaran {ind}, {tahun}")
+        fig.update_layout(yaxis_title="", xaxis_title="")
+        tampil(fig, 440)
+    with b:
+        st.write("")
+        st.write("")
+        fig = px.scatter(p_tahun, x="pekerja_total", y="pendapatan_triliun", color="wilayah",
+                         hover_name="provinsi", log_x=True, log_y=True, color_discrete_sequence=PALET,
+                         trendline="ols", trendline_scope="overall", trendline_color_override="#444444",
+                         trendline_options=dict(log_x=True, log_y=True),
+                         title=f"Pekerja dan pendapatan (skala log), {tahun}")
+        fig.update_traces(selector=dict(mode="markers"), marker=dict(size=9, opacity=0.85,
+                                                                       line=dict(width=0.5, color="white")))
+        fig.update_layout(xaxis_title="Jumlah pekerja", yaxis_title="Pendapatan (Rp triliun)")
+        tampil(fig, 440)
+
+    st.subheader("Korelasi antar indikator")
+    kor_kolom = {"usaha": "Usaha", "pekerja_total": "Pekerja", "pendapatan_triliun": "Pendapatan",
+                 "pend_per_usaha_juta": "Pend./usaha", "pend_per_pekerja_juta": "Pend./pekerja",
+                 "margin_pct": "Margin", "pct_tdk_dibayar": "% tdk dibayar"}
+    kor = p_tahun[list(kor_kolom)].rename(columns=kor_kolom).corr(method="spearman")
+    fig = px.imshow(kor, text_auto=".2f", zmin=-1, zmax=1, aspect="auto",
+                    color_continuous_scale=[[0, MERAH], [0.5, "#FFFFFF"], [1, BIRU]],
+                    title=f"Korelasi peringkat Spearman, {tahun}")
+    fig.update_xaxes(showgrid=False)
+    fig.update_yaxes(showgrid=False)
+    tampil(fig, 480)
+    st.caption("Jumlah usaha, pekerja, dan pendapatan berkorelasi sangat kuat karena sama-sama mengukur ukuran "
+               "provinsi. Indikator per usaha dan per pekerja lebih informatif untuk membandingkan produktivitas.")
+
+# ================================================================ 3. Jenis industri
+with tab_sektor:
+    pil = st.selectbox("Ukuran", list(METRIK), key="sektor_metrik")
+    kol, sat, fmt = METRIK[pil]
+    s = k_tahun.sort_values(kol)
+    fig = px.bar(s, x=kol, y="label", orientation="h", color_discrete_sequence=[BIRU],
+                 title=f"{pil} menurut jenis industri (KBLI 2 digit), {tahun}")
+    fig.update_traces(texttemplate="%{x:" + fmt + "}", textposition="outside", cliponaxis=False, marker_line_width=0)
+    fig.update_layout(xaxis_title=sat, yaxis_title="", bargap=0.3)
+    fig.update_yaxes(showgrid=False)
+    tampil(fig, 680)
+
+    top3 = k_tahun.nlargest(3, "usaha")
+    pangsa = top3["usaha"].sum() / k_tahun["usaha"].sum() * 100
+    st.caption(f"Tiga jenis industri dengan usaha terbanyak ({', '.join(top3['sektor'])}) mencakup "
+               f"{fmt_id(pangsa, 1)}% dari seluruh usaha pada {tahun}.")
+
+    st.subheader("Produktivitas menurut jenis industri")
+    ind = st.selectbox("Indikator", list(INDIKATOR), key="sektor_ind")
+    s2 = k_tahun.sort_values(INDIKATOR[ind])
+    fig = px.bar(s2, x=INDIKATOR[ind], y="label", orientation="h", color_discrete_sequence=[BIRU],
+                 title=f"{ind}, {tahun}")
+    fig.update_traces(texttemplate="%{x:,.1f}", textposition="outside", cliponaxis=False, marker_line_width=0)
+    fig.update_layout(xaxis_title="", yaxis_title="", bargap=0.3)
+    fig.update_yaxes(showgrid=False)
+    tampil(fig, 680)
+    st.caption("Industri dengan jumlah usaha sangat kecil (misalnya KBLI 26 dan 29) rentan terhadap variasi sampel, "
+               "sehingga rata-ratanya perlu dibaca hati-hati.")
+
+# ================================================================ 4. Perubahan
+with tab_ubah:
+    st.subheader("Perubahan nasional")
+    nas = perubahan_nasional(prov)
+    tmp = nas.copy()
+    for kolom in ("2024", "2025"):
+        tmp[kolom] = tmp[kolom].map(lambda v: fmt_id(v))
+    tmp["perubahan_pct"] = tmp["perubahan_pct"].map(lambda v: f"{'+' if v > 0 else ''}{fmt_id(v, 1)}%")
+    st.dataframe(tmp.rename(columns={"perubahan_pct": "Perubahan"}), width="stretch")
+
+    st.subheader("Perubahan antar provinsi")
+    var_ubah = {"Jumlah usaha": "usaha", "Jumlah pekerja": "pekerja_total", "Pendapatan": "pendapatan_000"}
+    pv = st.selectbox("Variabel", list(var_ubah), key="ubah_var")
+    ch = perubahan_provinsi(prov, var_ubah[pv])
+    ch["arah"] = np.where(ch["perubahan_pct"] >= 0, "Naik", "Turun")
+    fig = px.bar(ch, x="perubahan_pct", y="provinsi", orientation="h", color="arah",
+                 color_discrete_map={"Naik": BIRU, "Turun": MERAH},
+                 title=f"Perubahan {pv.lower()} 2024 ke 2025 (%)",
+                 hover_data={"2024": ":,.0f", "2025": ":,.0f", "arah": False})
+    fig.update_traces(marker_line_width=0)
+    fig.update_layout(xaxis_title="Perubahan (%)", yaxis_title="", bargap=0.3, showlegend=False,
+                      yaxis=dict(categoryorder="total ascending", showgrid=False))
+    tampil(fig, 900)
+    rentang = ch["perubahan_pct"]
+    st.warning(
+        f"Perubahan antar provinsi sangat lebar (dari {rentang.min():.0f}% sampai +{rentang.max():.0f}%). Data BPS "
+        "berasal dari survei sampel, sehingga selisih dua tahun di tingkat provinsi dapat dipengaruhi variasi "
+        "sampel dan tidak otomatis mencerminkan perubahan kondisi riil. Hanya dua titik waktu yang tersedia, "
+        "sehingga tidak dilakukan peramalan deret waktu."
+    )
+
+# ================================================================ 5. Model dan klaster
+with tab_model:
+    st.subheader("Regresi: hubungan pekerja dengan pendapatan")
     st.markdown(
-        '<div class="chart-container">'
-        '<div class="chart-title">💰 Rata-rata Omzet per Skala Usaha (Juta Rp)</div>',
-        unsafe_allow_html=True,
+        "Model log-log pada 76 pengamatan (38 provinsi x 2 tahun):  \n"
+        "`ln(pendapatan) = b0 + b1 ln(pekerja dibayar) + b2 ln(pekerja tidak dibayar) + b3 D2025 + e`  \n"
+        "Koefisien b1 dan b2 dibaca sebagai elastisitas: kenaikan 1% pekerja berasosiasi dengan kenaikan "
+        "pendapatan sebesar b%. Galat baku robust terhadap korelasi dalam provinsi (cluster)."
+    )
+    model, tabel, vif = regresi(prov)
+    tr = tabel.copy()
+    tr["p-value"] = tr["p-value"].map(lambda v: "<0,001" if v < 0.001 else fmt_id(v, 3))
+    for kolom in ["Koefisien", "Galat baku", "z", "CI 95% bawah", "CI 95% atas"]:
+        tr[kolom] = tr[kolom].map(lambda v: fmt_id(v, 3))
+    st.dataframe(tr, width="stretch")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("R-kuadrat", fmt_id(model.rsquared, 3))
+    m2.metric("Jumlah pengamatan", int(model.nobs))
+    m3.metric("Jumlah elastisitas (b1 + b2)", fmt_id(model.params["ln_dibayar"] + model.params["ln_tdk_dibayar"], 2))
+    st.caption("VIF: " + ", ".join(f"{k} = {fmt_id(v, 1)}" for k, v in vif.items() if k != "d2025")
+               + ". Nilai di atas 10 menandakan multikolinearitas yang tinggi, sehingga pembagian pengaruh antara "
+               "dua jenis pekerja kurang tegas.")
+    st.info(
+        "Interpretasi hati-hati: model ini menunjukkan asosiasi antar provinsi, bukan hubungan sebab-akibat. "
+        "R-kuadrat tinggi sebagian besar mencerminkan perbedaan ukuran provinsi. Dummy 2025 yang tidak signifikan "
+        "berarti tidak ada pergeseran tingkat pendapatan yang jelas antar tahun setelah ukuran tenaga kerja dikendalikan."
     )
 
-    skala_sektor = (
-        filtered.groupby(["skala", "sektor"], as_index=False)["omzet_juta"].mean()
+    st.subheader("Klaster provinsi (K-Means)")
+    c1, c2 = st.columns(2)
+    thn_k = c1.selectbox("Tahun data klaster", [2025, 2024], key="k_tahun")
+    k = c2.slider("Jumlah klaster (k)", 2, 6, 3)
+    st.caption("Indikator (distandarisasi): " + "; ".join(FITUR_KLASTER.values()) + ".")
+    hasil, sil, profil, var_pc = klaster(prov[prov["tahun"] == thn_k], k)
+
+    a, b = st.columns(2)
+    with a:
+        sdf = pd.DataFrame({"k": list(sil), "silhouette": list(sil.values())})
+        fig = px.line(sdf, x="k", y="silhouette", markers=True, color_discrete_sequence=[BIRU],
+                      title="Silhouette score menurut k")
+        fig.update_layout(xaxis=dict(dtick=1), yaxis_title="Silhouette", xaxis_title="Jumlah klaster (k)")
+        tampil(fig, 380)
+    with b:
+        fig = px.scatter(hasil, x="PC1", y="PC2", color="klaster", hover_name="provinsi",
+                         color_discrete_sequence=PALET,
+                         title=f"Proyeksi PCA ({fmt_id(var_pc.sum() * 100, 0)}% varians)")
+        fig.update_traces(marker=dict(size=10, opacity=0.9, line=dict(width=0.5, color="white")))
+        tampil(fig, 380)
+
+    st.dataframe(tabel_fmt(profil), width="stretch")
+    for nama, grup in hasil.groupby("klaster"):
+        st.markdown(f"**{nama}** ({len(grup)} provinsi): " + ", ".join(sorted(grup["provinsi"])))
+    st.info(
+        "Nilai silhouette yang rendah (di bawah sekitar 0,5) menandakan struktur klaster yang lemah, dan hasilnya "
+        "berubah antar tahun. Klaster kecil umumnya berisi provinsi dengan karakter menyimpang (misalnya DKI Jakarta "
+        "dengan porsi pekerja dibayar tinggi), bukan kelompok yang tegas. Hasil ini bersifat eksploratif."
     )
 
-    fig_grouped = px.bar(
-        skala_sektor,
-        x="skala",
-        y="omzet_juta",
-        color="sektor",
-        barmode="group",
-        color_discrete_map=SEKTOR_COLORS,
-        labels={"omzet_juta": "Omzet (Juta Rp)", "skala": "Skala Usaha", "sektor": "Sektor"},
-        category_orders={"skala": ["Mikro", "Kecil", "Menengah"]},
-    )
-    fig_grouped.update_layout(**make_layout(
-        height=400,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="center",
-            x=0.5,
-        ),
-    ))
-    fig_grouped.update_traces(
-        marker_line_width=0,
-        hovertemplate="<b>%{x}</b><br>Omzet: Rp %{y:,.0f} Jt<extra></extra>",
-    )
-    st.plotly_chart(fig_grouped, use_container_width=True, config={"displayModeBar": False})
-    st.markdown("</div>", unsafe_allow_html=True)
+# ================================================================ 6. Data dan metodologi
+with tab_data:
+    st.subheader("Data")
+    set_data = st.radio("Dataset", ["Per provinsi", "Per jenis industri (KBLI)"], horizontal=True)
+    if set_data == "Per provinsi":
+        sumber, nama = prov, "imk_provinsi_2024_2025_olahan.csv"
+    else:
+        sumber, nama = kbli, "imk_kbli_2024_2025_olahan.csv"
+    data_tampil = sumber.drop(columns=["ln_pend_usaha", "ln_pend_pekerja"]).round(3)
+    st.dataframe(data_tampil, width="stretch", height=380)
+    st.download_button("Unduh CSV", data_tampil.to_csv(index=False).encode("utf-8"), file_name=nama,
+                       mime="text/csv")
 
-with col6:
-    st.markdown(
-        '<div class="chart-container">'
-        '<div class="chart-title">🔥 Tren Sektor Usaha per Tahun</div>',
-        unsafe_allow_html=True,
-    )
+    st.subheader("Metodologi")
+    st.markdown("""
+**Sumber.** BPS, *Profil Industri Mikro dan Kecil 2024* (Vol. 15, 2025) dan *2025* (Vol. 16, 2026), Tabel 5 (menurut KBLI) dan
+Tabel 6 (menurut provinsi). Nilai pendapatan, pengeluaran, dan balas jasa dalam ribu rupiah.
 
-    sektor_trend = (
-        filtered.groupby(["tahun", "sektor"], as_index=False)["jumlah_umkm"].sum()
-    )
+**Cakupan.** Industri pengolahan (manufaktur) dengan 1 sampai 19 pekerja. Data ini **tidak** mencakup seluruh UMKM
+(perdagangan dan jasa tidak termasuk), sehingga kesimpulan hanya berlaku untuk industri mikro dan kecil sektor manufaktur.
 
-    fig_sektor_line = px.line(
-        sektor_trend,
-        x="tahun",
-        y="jumlah_umkm",
-        color="sektor",
-        color_discrete_map=SEKTOR_COLORS,
-        markers=True,
-        labels={"jumlah_umkm": "Jumlah UMKM", "tahun": "", "sektor": "Sektor"},
-    )
-    fig_sektor_line.update_layout(**make_layout(
-        height=400,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="center",
-            x=0.5,
-        ),
-        xaxis=dict(dtick=1),
-    ))
-    fig_sektor_line.update_traces(
-        line_width=2.5,
-        marker_size=7,
-        hovertemplate="<b>%{x}</b><br>UMKM: %{y:,.0f}<extra></extra>",
-    )
-    st.plotly_chart(fig_sektor_line, use_container_width=True, config={"displayModeBar": False})
-    st.markdown("</div>", unsafe_allow_html=True)
+**Pengolahan.** Tabel diekstrak dari PDF, lalu divalidasi dengan menjumlahkan seluruh baris dan membandingkannya dengan
+baris total nasional BPS (selisih maksimum 4 satuan, akibat pembulatan). Sebagian baris yang terpecah oleh watermark PDF
+dibaca ulang secara manual dari dokumen.
 
-# ============================================================
-# SECTION 5: ANALISIS MENDALAM
-# ============================================================
-st.markdown(
-    '<div class="section-header">🔬 Analisis Mendalam</div>',
-    unsafe_allow_html=True,
-)
+**Indikator turunan.** Pendapatan per usaha, pekerja per usaha, pendapatan per pekerja, margin ((pendapatan - pengeluaran) /
+pendapatan), dan persentase pekerja tidak dibayar. Margin adalah pendekatan kasar karena pengeluaran tidak memuat seluruh
+komponen biaya.
 
-analisis_insight = generate_insight(filtered, "analisis")
-st.markdown(
-    f'<div class="insight-box"><div class="insight-title">💡 Insight Otomatis</div>'
-    f'<p>{analisis_insight}</p></div>',
-    unsafe_allow_html=True,
-)
+**Modul penjualan usaha.** Menganalisis data transaksi satu usaha. Pembersihan: tanggal tidak terbaca, produk kosong,
+jumlah tidak positif, dan nilai kosong atau negatif dibuang dan dilaporkan. Prakiraan memakai Holt-Winters (tren teredam dan
+musiman mingguan), dievaluasi pada 28 hari terakhir terhadap baseline musiman-naif dengan MAE dan WAPE. Contoh data yang
+tersedia adalah **simulasi** untuk demonstrasi, bukan data usaha nyata.
 
-col7, col8 = st.columns(2)
-
-with col7:
-    st.markdown(
-        '<div class="chart-container">'
-        '<div class="chart-title">🔗 Heatmap Korelasi Variabel</div>',
-        unsafe_allow_html=True,
-    )
-
-    corr_cols = ["jumlah_umkm", "tenaga_kerja", "omzet_juta", "pertumbuhan_pct"]
-    corr_labels = ["Jumlah UMKM", "Tenaga Kerja", "Omzet", "Pertumbuhan"]
-    corr_matrix = filtered[corr_cols].corr()
-
-    fig_heatmap = go.Figure(
-        go.Heatmap(
-            z=corr_matrix.values,
-            x=corr_labels,
-            y=corr_labels,
-            colorscale=[
-                [0, "#312e81"],
-                [0.25, "#4338ca"],
-                [0.5, "#6366f1"],
-                [0.75, "#22d3ee"],
-                [1, "#10b981"],
-            ],
-            zmin=-1,
-            zmax=1,
-            text=np.round(corr_matrix.values, 2),
-            texttemplate="%{text}",
-            textfont=dict(size=14, color=THEME['heatmap_text']),
-            hovertemplate="%{x} vs %{y}<br>Korelasi: %{z:.3f}<extra></extra>",
-        )
-    )
-    fig_heatmap.update_layout(**make_layout(
-        height=400,
-        xaxis=dict(side="bottom"),
-    ))
-    st.plotly_chart(fig_heatmap, use_container_width=True, config={"displayModeBar": False})
-    st.markdown("</div>", unsafe_allow_html=True)
-
-with col8:
-    st.markdown(
-        '<div class="chart-container">'
-        '<div class="chart-title">🔵 Hubungan Omzet vs Tenaga Kerja</div>',
-        unsafe_allow_html=True,
-    )
-
-    # Aggregate per provinsi untuk scatter yang lebih bersih
-    scatter_data = (
-        filtered.groupby(["provinsi", "skala"], as_index=False)
-        .agg(
-            omzet_juta=("omzet_juta", "mean"),
-            tenaga_kerja=("tenaga_kerja", "mean"),
-            jumlah_umkm=("jumlah_umkm", "sum"),
-        )
-    )
-
-    fig_scatter = px.scatter(
-        scatter_data,
-        x="omzet_juta",
-        y="tenaga_kerja",
-        size="jumlah_umkm",
-        color="skala",
-        color_discrete_map=SKALA_COLORS,
-        hover_name="provinsi",
-        labels={
-            "omzet_juta": "Rata-rata Omzet (Juta Rp)",
-            "tenaga_kerja": "Rata-rata Tenaga Kerja",
-            "jumlah_umkm": "Total UMKM",
-            "skala": "Skala",
-        },
-        size_max=30,
-    )
-    fig_scatter.update_layout(**make_layout(
-        height=400,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="center",
-            x=0.5,
-        ),
-    ))
-    fig_scatter.update_traces(
-        marker_line_width=1,
-        marker_line_color=THEME['marker_line'],
-        hovertemplate="<b>%{hovertext}</b><br>Omzet: Rp %{x:,.0f} Jt<br>TK: %{y:,.0f}<extra></extra>",
-    )
-    st.plotly_chart(fig_scatter, use_container_width=True, config={"displayModeBar": False})
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# ============================================================
-# SECTION 6: DISTRIBUSI SKALA USAHA PER PROVINSI (STACKED)
-# ============================================================
-st.markdown(
-    '<div class="section-header">🏗️ Distribusi Skala Usaha per Provinsi</div>',
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    '<div class="chart-container">'
-    '<div class="chart-title">📊 Komposisi Skala Usaha — Top 15 Provinsi</div>',
-    unsafe_allow_html=True,
-)
-
-stacked_data = (
-    filtered.groupby(["provinsi", "skala"], as_index=False)["jumlah_umkm"]
-    .sum()
-)
-top15_prov = (
-    stacked_data.groupby("provinsi")["jumlah_umkm"]
-    .sum()
-    .nlargest(15)
-    .index
-)
-stacked_data = stacked_data[stacked_data["provinsi"].isin(top15_prov)]
-
-fig_stacked = px.bar(
-    stacked_data,
-    x="provinsi",
-    y="jumlah_umkm",
-    color="skala",
-    barmode="stack",
-    color_discrete_map=SKALA_COLORS,
-    labels={"jumlah_umkm": "Jumlah UMKM", "provinsi": "", "skala": "Skala"},
-    category_orders={
-        "skala": ["Mikro", "Kecil", "Menengah"],
-        "provinsi": stacked_data.groupby("provinsi")["jumlah_umkm"]
-        .sum()
-        .sort_values(ascending=False)
-        .index.tolist(),
-    },
-)
-fig_stacked.update_layout(**make_layout(
-    height=420,
-    legend=dict(
-        orientation="h",
-        yanchor="bottom",
-        y=1.02,
-        xanchor="center",
-        x=0.5,
-    ),
-    xaxis=dict(tickangle=-45),
-))
-fig_stacked.update_traces(
-    marker_line_width=0,
-    hovertemplate="<b>%{x}</b><br>UMKM: %{y:,.0f}<extra></extra>",
-)
-st.plotly_chart(fig_stacked, use_container_width=True, config={"displayModeBar": False})
-st.markdown("</div>", unsafe_allow_html=True)
-
-# ============================================================
-# SECTION 7: DATA TABLE
-# ============================================================
-st.markdown(
-    '<div class="section-header">📋 Data Detail</div>',
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    '<div class="chart-container">',
-    unsafe_allow_html=True,
-)
-
-# Summary stats
-tab1, tab2 = st.tabs(["📊 Ringkasan per Provinsi", "📄 Data Lengkap"])
-
-with tab1:
-    summary = (
-        filtered.groupby("provinsi", as_index=False)
-        .agg(
-            total_umkm=("jumlah_umkm", "sum"),
-            total_tk=("tenaga_kerja", "sum"),
-            avg_omzet=("omzet_juta", "mean"),
-            avg_pertumbuhan=("pertumbuhan_pct", "mean"),
-        )
-        .sort_values("total_umkm", ascending=False)
-    )
-    summary.columns = [
-        "Provinsi",
-        "Total UMKM",
-        "Total Tenaga Kerja",
-        "Rata-rata Omzet (Jt Rp)",
-        "Rata-rata Pertumbuhan (%)",
-    ]
-    summary["Rata-rata Omzet (Jt Rp)"] = summary["Rata-rata Omzet (Jt Rp)"].round(1)
-    summary["Rata-rata Pertumbuhan (%)"] = summary["Rata-rata Pertumbuhan (%)"].round(2)
-
-    st.dataframe(
-        summary,
-        use_container_width=True,
-        height=400,
-        hide_index=True,
-    )
-
-    csv_summary = summary.to_csv(index=False).encode("utf-8")
-    dl_col1, dl_col2 = st.columns(2)
-    with dl_col1:
-        st.download_button(
-            label="📥 Download CSV",
-            data=csv_summary,
-            file_name="ringkasan_umkm_provinsi.csv",
-            mime="text/csv",
-        )
-    with dl_col2:
-        excel_summary = to_excel(summary)
-        st.download_button(
-            label="📥 Download Excel",
-            data=excel_summary,
-            file_name="ringkasan_umkm_provinsi.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-
-with tab2:
-    display_df = filtered.copy()
-    display_df.columns = [
-        "Provinsi",
-        "Sektor",
-        "Skala",
-        "Tahun",
-        "Jumlah UMKM",
-        "Tenaga Kerja",
-        "Omzet (Juta Rp)",
-        "Pertumbuhan (%)",
-    ]
-
-    st.dataframe(
-        display_df,
-        use_container_width=True,
-        height=400,
-        hide_index=True,
-    )
-
-    csv_full = display_df.to_csv(index=False).encode("utf-8")
-    dl_col3, dl_col4 = st.columns(2)
-    with dl_col3:
-        st.download_button(
-            label="📥 Download CSV",
-            data=csv_full,
-            file_name="data_umkm_lengkap.csv",
-            mime="text/csv",
-        )
-    with dl_col4:
-        excel_full = to_excel(display_df)
-        st.download_button(
-            label="📥 Download Excel",
-            data=excel_full,
-            file_name="data_umkm_lengkap.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        )
-
-st.markdown("</div>", unsafe_allow_html=True)
-
-# ============================================================
-# FOOTER
-# ============================================================
-st.markdown(
-    """
-    <div class="footer">
-        <p>📊 <strong>Dashboard Analisis UMKM Indonesia</strong> — Dibuat dengan Streamlit, Plotly, Pandas &amp; NumPy</p>
-        <p>Data sampel berdasarkan pola statistik BPS Indonesia | © 2024</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+**Keterbatasan.** (1) Data survei sampel, sehingga angka provinsi memiliki galat sampling yang tidak tersedia di tabel.
+(2) Hanya dua tahun, sehingga tidak ada peramalan deret waktu. (3) Provinsi baru hasil pemekaran Papua memiliki jumlah
+usaha kecil. (4) Hasil regresi dan klaster bersifat asosiatif dan eksploratif.
+""")
