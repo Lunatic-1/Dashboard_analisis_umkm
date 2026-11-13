@@ -30,27 +30,36 @@ PALET = ["#1F4E79", "#B5503C", "#4F8A5B", "#7B6A9E", "#C98B2B", "#5B9BD5", "#7F8
 FONT = "Source Sans 3, Segoe UI, Arial, sans-serif"
 
 # ---------------------------------------------------------------- Gaya halaman
+# Token desain dari prototype (Dashboard Analisis UMKM, 11 Nov 2026):
+# latar #F2F5F8, permukaan putih, tinta #1B2733, redup #5A6B7B, garis #D9E1E9,
+# navy #1F4E79, navy-soft #DBE7F1, hijau delta #2E7D46, merah delta #B03A2E,
+# emas badge #C98B2B, judul serif Georgia, isi Segoe UI/system.
 st.markdown(
     """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;500;600&family=Source+Serif+4:wght@600;700&display=swap');
-.stApp { font-family: 'Source Sans 3', 'Segoe UI', Arial, sans-serif; color: #1F2933; }
-h1, h2, h3 { font-family: 'Source Serif 4', Georgia, serif !important; color: #14263B; font-weight: 600; letter-spacing: 0; }
-.block-container { max-width: 1240px; padding-top: 2.2rem; padding-bottom: 3rem; }
-h1 { font-size: 1.95rem !important; padding-bottom: .45rem; border-bottom: 2px solid #1F4E79; margin-bottom: .4rem; }
-h3 { font-size: 1.2rem !important; margin-top: 1.2rem; }
-[data-testid="stCaptionContainer"] { color: #5B6B7B; }
-[data-testid="stMetric"] { background: #FFFFFF; border: 1px solid #D9DEE5; border-left: 4px solid #1F4E79;
-    border-radius: 4px; padding: 14px 16px; }
-[data-testid="stMetricLabel"] p { font-size: .82rem; color: #5B6B7B; font-weight: 500; }
-[data-testid="stMetricValue"] { font-size: 1.65rem; color: #14263B; font-weight: 600; }
-.stTabs [data-baseweb="tab-list"] { gap: 2px; border-bottom: 1px solid #D9DEE5; }
+.stApp { font-family: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+    color: #1B2733; background: #F2F5F8; font-variant-numeric: tabular-nums; }
+h1, h2, h3 { font-family: Georgia, 'Times New Roman', Times, serif !important; color: #1B2733;
+    font-weight: 700; letter-spacing: 0; }
+h2 { font-size: 1.35rem !important; margin-top: 34px !important; }
+h3 { font-size: 1.05rem !important; margin-top: 1.2rem; }
+.block-container { max-width: 1180px; padding-top: 1.5rem; padding-bottom: 3rem; }
+[data-testid="stCaptionContainer"] { color: #5A6B7B; }
+[data-testid="stMetric"] { background: #FFFFFF; border: 1px solid #D9E1E9; border-left: 4px solid #1F4E79;
+    border-radius: 8px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(27,39,51,0.08); }
+[data-testid="stMetricLabel"] p { font-size: .8rem; color: #5A6B7B; font-weight: 700;
+    letter-spacing: .05em; text-transform: uppercase; }
+[data-testid="stMetricValue"] { font-size: 1.65rem; color: #1B2733; font-weight: 700; font-variant-numeric: tabular-nums; }
+[data-testid="stMetricDelta"] { font-size: .85rem; }
+div[data-testid="stVerticalBlockBorderWrapper"] { border: 1px solid #D9E1E9; border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(27,39,51,0.08); background: #FFFFFF; }
+[data-testid="stWidgetLabel"] p { font-size: .78rem; color: #5A6B7B; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase; }
+.stTabs [data-baseweb="tab-list"] { gap: 2px; border-bottom: 1px solid #D9E1E9; }
 .stTabs [data-baseweb="tab"] { padding: 10px 18px; font-weight: 500; color: #4A5A6A; }
 .stTabs [aria-selected="true"] { color: #1F4E79; font-weight: 600; }
-section[data-testid="stSidebar"] { border-right: 1px solid #D9DEE5; }
-[data-testid="stSidebar"] h2 { font-size: 1.1rem !important; }
-[data-testid="stDataFrame"] { border: 1px solid #D9DEE5; border-radius: 4px; }
-div[data-testid="stAlert"] { border-radius: 4px; }
+[data-testid="stDataFrame"] { border: 1px solid #D9E1E9; border-radius: 10px; }
+div[data-testid="stAlert"] { border-radius: 8px; }
 #MainMenu, footer { visibility: hidden; }
 </style>
 """,
@@ -110,6 +119,63 @@ def tabel_fmt(df: pd.DataFrame, desimal: int = 2) -> pd.DataFrame:
     return df.apply(lambda kol: kol.map(lambda v: fmt_id(v, desimal) if isinstance(v, (int, float, np.number)) else v))
 
 
+HIJAU_DELTA = "#2E7D46"
+MERAH_DELTA = "#B03A2E"
+NAVY_SOFT = "#DBE7F1"
+
+
+def kartu_kpi(label, nilai, satuan="", delta=None, arah=None):
+    """Kartu KPI ala prototype: putih, garis kiri navy 4px, delta ▲/▼/± berwarna."""
+    warna = {"naik": HIJAU_DELTA, "turun": MERAH_DELTA, "datar": "#5A6B7B"}.get(arah, "#5A6B7B")
+    glyph = {"naik": "▲", "turun": "▼", "datar": "±"}.get(arah, "")
+    delta_html = ""
+    if delta:
+        delta_html = (f'<div style="font-size:0.85rem; color:{warna}; font-weight:700;">{glyph}{delta} '
+                      f'<span style="color:#5A6B7B; font-weight:400;">vs 2024</span></div>')
+    return (f'<div style="background:#FFFFFF; border:1px solid #D9E1E9; border-left:4px solid #1F4E79; '
+            f'border-radius:8px; padding:16px 18px; box-shadow:0 1px 3px rgba(27,39,51,0.08);">'
+            f'<div style="font-size:0.8rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; '
+            f'color:#5A6B7B;">{label}</div>'
+            f'<div style="font-size:1.65rem; font-weight:700; color:#1B2733; font-variant-numeric:tabular-nums;">'
+            f'{nilai} <span style="font-size:0.9rem; font-weight:400; color:#5A6B7B;">{satuan}</span></div>'
+            f'{delta_html}</div>')
+
+
+def kartu_temuan(judul, isi_html, badge=None):
+    """Kartu temuan ala prototype: panel putih dengan angka kunci navy."""
+    badge_html = ""
+    if badge:
+        badge_html = (f' <span style="background:#C98B2B; color:#241A02; font-size:0.72rem; font-weight:700; '
+                      f'letter-spacing:0.07em; padding:3px 9px; border-radius:999px;">{badge}</span>')
+    return (f'<div style="background:#FFFFFF; border:1px solid #D9E1E9; border-radius:10px; padding:18px; '
+            f'box-shadow:0 1px 3px rgba(27,39,51,0.08);">'
+            f'<h3 style="font-size:1.02rem; margin:0 0 8px;">{judul}{badge_html}</h3>'
+            f'<div style="font-size:0.93rem;">{isi_html}</div></div>')
+
+
+def angka_kunci(teks):
+    return (f'<span style="font-size:1.3rem; font-weight:700; color:#1F4E79; '
+            f'font-variant-numeric:tabular-nums;">{teks}</span>')
+
+
+def lencana(teks):
+    """Pill emas ala prototype untuk menandai status data."""
+    return (f'<span style="background:#C98B2B; color:#241A02; font-size:0.72rem; font-weight:700; '
+            f'letter-spacing:0.07em; padding:3px 9px; border-radius:999px;">{teks}</span>')
+
+
+def warna_rank(n):
+    """Warna batang per peringkat ala prototype: peringkat 1 navy, lalu palet berurutan.
+    Daftar diasumsikan terurut menaik (nilai terkecil dulu, seperti grafik horizontal)."""
+    return [PALET[(n - 1 - i) % len(PALET)] for i in range(n)]
+
+
+def callout_navy(teks):
+    """Strip callout navy-soft ala prototype."""
+    return (f'<div style="background:{NAVY_SOFT}; border-radius:8px; padding:12px 14px; '
+            f'font-size:0.92rem; margin-top:16px;">{teks}</div>')
+
+
 # ---------------------------------------------------------------- Modul penjualan usaha
 @st.cache_data
 def _contoh():
@@ -141,10 +207,11 @@ def _tebak(kolom, kunci, opsional=False):
 
 def render_penjualan():
     st.subheader("Analisis penjualan tingkat usaha")
-    st.caption("Tab ini menganalisis data transaksi satu usaha dan tidak dipengaruhi pengaturan di sidebar.")
+    st.caption("Tab ini menganalisis data transaksi satu usaha dan tidak dipengaruhi pengaturan Tahun/Wilayah di atas.")
     sumber = st.radio("Sumber data", ["Contoh data nyata (UCI Online Retail)", "Unggah data sendiri"], horizontal=True, key="jual_sumber")
 
     if sumber == "Contoh data nyata (UCI Online Retail)":
+        st.markdown(lencana("DATA NYATA · UCI ONLINE RETAIL"), unsafe_allow_html=True)
         st.info(
             "Data contoh ini adalah data transaksi NYATA dari UCI Online Retail, toko online di Inggris "
             "(1 Des 2010-31 Mei 2011, 203.181 baris). Harga asli dalam pound sterling sudah dikonversi ke rupiah "
@@ -206,11 +273,17 @@ def render_penjualan():
     st.caption(f"Periode data: {r['awal']:%d/%m/%Y} sampai {r['akhir']:%d/%m/%Y}.")
 
     n80 = int((pp["kumulatif_pct"] < 80).sum() + 1)
+    if rh.min() > 0:
+        banding_hari = (f"Rata-rata omzet harian tertinggi jatuh pada hari {rh.idxmax()} (Rp {fmt_id(rh.max())}), "
+                        f"{fmt_id(rh.max() / rh.min(), 2)} kali hari terendah ({rh.idxmin()}).")
+    else:
+        # Hari terendah tutup (rata-rata omzet Rp 0), sehingga rasio tidak terdefinisi.
+        banding_hari = (f"Rata-rata omzet harian tertinggi jatuh pada hari {rh.idxmax()} (Rp {fmt_id(rh.max())}); "
+                        f"hari {rh.idxmin()} tutup (rata-rata omzet Rp 0).")
     temuan = [
         f"**{pp.iloc[0]['produk']}** adalah penyumbang omzet terbesar ({fmt_id(pp.iloc[0]['porsi_pct'], 1)}%).",
         f"{n80} dari {len(pp)} produk ({fmt_id(n80 / len(pp) * 100, 0)}%) menghasilkan 80% omzet.",
-        f"Rata-rata omzet harian tertinggi jatuh pada hari {rh.idxmax()} (Rp {fmt_id(rh.max())}), "
-        f"{fmt_id(rh.max() / rh.min(), 2)} kali hari terendah ({rh.idxmin()}).",
+        banding_hari,
     ]
     if pj.ada_jam(d):
         jam = int(pj.pola_hari_jam(d).sum().idxmax())
@@ -242,9 +315,10 @@ def render_penjualan():
     a, b = st.columns([3, 2])
     with a:
         top = pp.nlargest(10, kolom_u).sort_values(kolom_u)
-        fig = px.bar(top, x=kolom_u, y="produk", orientation="h", color_discrete_sequence=[BIRU],
+        fig = px.bar(top, x=kolom_u, y="produk", orientation="h",
                      title=f"10 produk teratas menurut {ukuran.lower()}")
-        fig.update_traces(texttemplate="%{x:,.0f}", textposition="outside", cliponaxis=False, marker_line_width=0)
+        fig.update_traces(texttemplate="%{x:,.0f}", textposition="outside", cliponaxis=False,
+                          marker_line_width=0, marker_color=warna_rank(len(top)))
         fig.update_layout(xaxis_title="Rp" if kolom_u == "omzet" else "unit", yaxis_title="", bargap=0.35)
         fig.update_yaxes(showgrid=False)
         tampil(fig, 420)
@@ -347,17 +421,36 @@ def render_kesimpulan():
 
     st.subheader("Temuan utama dari data nasional (BPS)")
     st.markdown(f"""
-1. **Skala tetap, tenaga kerja menyusut.** Jumlah usaha {pct(nas.loc['Jumlah usaha', 'perubahan_pct'])}, jumlah pekerja
-   {pct(nas.loc['Pekerja (total)', 'perubahan_pct'])}, pendapatan {pct(nas.loc['Pendapatan (000 Rp)', 'perubahan_pct'])}, pengeluaran
-   {pct(nas.loc['Pengeluaran (000 Rp)', 'perubahan_pct'])} (2024 ke 2025). Margin kasar bergeser dari {fmt_id(marg[2024], 1)}% ke {fmt_id(marg[2025], 1)}%.
-2. **Terkonsentrasi di Jawa.** Pulau Jawa menyumbang {fmt_id(jawa['usaha'].sum() / p25['usaha'].sum() * 100, 1)}% usaha dan
-   {fmt_id(jawa['pendapatan_000'].sum() / p25['pendapatan_000'].sum() * 100, 1)}% pendapatan pada 2025.
-3. **Didominasi beberapa jenis industri.** {', '.join(top3['sektor'])} mencakup {fmt_id(top3['usaha'].sum() / kbli[kbli['tahun'] == 2025]['usaha'].sum() * 100, 1)}% usaha pada 2025.
-4. **Pendapatan tumbuh kira-kira sebanding dengan tenaga kerja.** Elastisitas terhadap pekerja dibayar {fmt_id(b_d, 2)} dan terhadap pekerja
-   tidak dibayar {fmt_id(b_t, 2)} (jumlah {fmt_id(b_d + b_t, 2)}). Ini asosiasi antar provinsi, bukan sebab-akibat.
-5. **Pengelompokan provinsi lemah.** Silhouette K-Means (k = 3) hanya {fmt_id(sil[2024], 2)} (2024) dan {fmt_id(sil[2025], 2)} (2025), sehingga
-   klaster dibaca sebagai eksplorasi, bukan kelompok yang tegas.
+- **Skala tetap, tenaga kerja menyusut.** Jumlah usaha {pct(nas.loc['Jumlah usaha', 'perubahan_pct'])}, jumlah pekerja
+  {pct(nas.loc['Pekerja (total)', 'perubahan_pct'])}, pendapatan {pct(nas.loc['Pendapatan (000 Rp)', 'perubahan_pct'])}, pengeluaran
+  {pct(nas.loc['Pengeluaran (000 Rp)', 'perubahan_pct'])} (2024 ke 2025). Margin kasar bergeser dari {fmt_id(marg[2024], 1)}% ke {fmt_id(marg[2025], 1)}%.
+- **Terkonsentrasi di Jawa.** Pulau Jawa menyumbang {fmt_id(jawa['usaha'].sum() / p25['usaha'].sum() * 100, 1)}% usaha dan
+  {fmt_id(jawa['pendapatan_000'].sum() / p25['pendapatan_000'].sum() * 100, 1)}% pendapatan pada 2025.
+- **Didominasi beberapa jenis industri.** {', '.join(top3['sektor'])} mencakup {fmt_id(top3['usaha'].sum() / kbli[kbli['tahun'] == 2025]['usaha'].sum() * 100, 1)}% usaha pada 2025.
 """)
+    f1, f2, f3 = st.columns(3)
+    with f1:
+        st.markdown(kartu_temuan(
+            "Regresi pekerja–pendapatan",
+            f"Elastisitas terhadap pekerja dibayar {angka_kunci(fmt_id(b_d, 2))} dan terhadap pekerja "
+            f"tidak dibayar {angka_kunci(fmt_id(b_t, 2))} (jumlah {fmt_id(b_d + b_t, 2)}). "
+            f"Ini asosiasi antar provinsi, bukan sebab-akibat."
+        ), unsafe_allow_html=True)
+    with f2:
+        st.markdown(kartu_temuan(
+            "Klaster provinsi (K-Means)",
+            f"Silhouette k = 3 hanya {angka_kunci(fmt_id(sil[2024], 2))} (2024) dan "
+            f"{angka_kunci(fmt_id(sil[2025], 2))} (2025) — struktur lemah dan tidak stabil antar tahun, "
+            f"sehingga klaster dibaca sebagai eksplorasi."
+        ), unsafe_allow_html=True)
+    with f3:
+        st.markdown(kartu_temuan(
+            "Penjualan tingkat usaha",
+            "Holt-Winters pada data transaksi nyata: WAPE "
+            f"{angka_kunci('59,4%')} vs baseline musiman-naif {angka_kunci('56,3%')} "
+            f"pada 28 hari uji (Mei 2011) — model tidak lebih akurat dari baseline pada data nyata yang berisik.",
+            badge="DATA NYATA"
+        ), unsafe_allow_html=True)
 
     st.subheader("Implikasi bagi pelaku UMKM")
     st.markdown("""
@@ -376,29 +469,41 @@ def render_kesimpulan():
 - Modul penjualan usaha memakai contoh data transaksi nyata (UCI Online Retail, bukan UMKM Indonesia) kecuali pengguna mengunggah data transaksi sendiri.
 """)
 
-# ---------------------------------------------------------------- Sidebar
-st.sidebar.header("Pengaturan data nasional (BPS)")
-tahun = st.sidebar.selectbox("Tahun", [2025, 2024])
-wilayah_semua = sorted(prov["wilayah"].unique())
-wilayah = st.sidebar.multiselect("Wilayah", wilayah_semua, default=wilayah_semua)
-if not wilayah:
-    st.sidebar.warning("Pilih minimal satu wilayah. Sementara semua wilayah dipakai.")
-    wilayah = wilayah_semua
-st.sidebar.caption(
+# ---------------------------------------------------------------- Header + filter (ala prototype: tanpa sidebar)
+st.markdown(
+    """
+<div style="background:#1F4E79; color:#FFFFFF; border-radius:10px; padding:28px 24px 24px; margin-bottom:20px;">
+<h1 style="font-family:Georgia,'Times New Roman',Times,serif; font-size:2rem; line-height:1.2; margin:0 0 8px; color:#FFFFFF;">Dashboard Analisis UMKM Indonesia</h1>
+<p style="font-size:1rem; color:#D7E5F1; max-width:62ch; margin:0 0 8px;">Dua lapisan analisis: (1) konteks nasional UMKM sektor industri pengolahan dari data BPS 2024&ndash;2025, dan (2) analisis penjualan tingkat usaha.</p>
+<p style="font-size:0.85rem; color:#A9C4DA; margin:0;">Sumber data: BPS, Profil Industri Mikro dan Kecil 2024 (Vol. 15, 2025) dan 2025 (Vol. 16, 2026), Katalog 6104006. Survei sampel; cakupan industri pengolahan dengan 1 sampai 19 pekerja. Usaha perdagangan dan jasa tidak termasuk.</p>
+</div>
+""",
+    unsafe_allow_html=True,
+)
+
+with st.container(border=True):
+    f1, f2, f3 = st.columns([1, 2, 1.1])
+    with f1:
+        tahun = st.segmented_control("Tahun", [2025, 2024], default=2025)
+    with f2:
+        wilayah_semua = sorted(prov["wilayah"].unique())
+        wilayah = st.multiselect("Wilayah", wilayah_semua, default=wilayah_semua)
+        if not wilayah:
+            st.warning("Pilih minimal satu wilayah. Sementara semua wilayah dipakai.")
+            wilayah = wilayah_semua
+    with f3:
+        st.markdown(
+            "<p style='font-size:0.85rem; color:#5A6B7B; margin-top:1.9rem;'>Cakupan: industri pengolahan "
+            "mikro dan kecil (1&ndash;19 pekerja), bukan seluruh UMKM.</p>",
+            unsafe_allow_html=True,
+        )
+st.caption(
     "Pengaturan ini berlaku pada tab Ringkasan Nasional dan Eksplorasi Data (tahun juga pada Jenis Industri). "
     "Tab Model dan Klaster memakai seluruh 38 provinsi. Tab Penjualan Usaha tidak terpengaruh."
 )
 
 p_tahun = prov[(prov["tahun"] == tahun) & (prov["wilayah"].isin(wilayah))]
 k_tahun = kbli[kbli["tahun"] == tahun]
-
-# ---------------------------------------------------------------- Judul
-st.title("Dashboard Analisis UMKM Indonesia")
-st.markdown("**Dua lapisan analisis: (1) konteks nasional UMKM sektor industri pengolahan dari data BPS 2024-2025, dan (2) analisis penjualan tingkat usaha.**")
-st.caption(
-    "Sumber: BPS, Profil Industri Mikro dan Kecil 2024 dan 2025. Survei sampel; cakupan industri pengolahan "
-    "dengan 1 sampai 19 pekerja. Usaha perdagangan dan jasa tidak termasuk."
-)
 
 (tab_jual, tab_ringkas, tab_eda, tab_sektor, tab_ubah, tab_model, tab_simpul, tab_data) = st.tabs(
     ["Penjualan Usaha", "Ringkasan Nasional", "Eksplorasi Data", "Jenis Industri", "Perubahan 2024-2025",
@@ -417,20 +522,43 @@ with tab_ringkas:
     tot = p_tahun[kolom_kpi].sum()
     margin = (tot["pendapatan_triliun"] - tot["pengeluaran_triliun"]) / tot["pendapatan_triliun"] * 100
     pembanding = None
+    marg0 = None
     if tahun == 2025:
         p0 = prov[(prov["tahun"] == 2024) & (prov["wilayah"].isin(wilayah))]
         pembanding = p0[kolom_kpi].sum()
+        marg0 = (pembanding["pendapatan_triliun"] - pembanding["pengeluaran_triliun"]) / pembanding["pendapatan_triliun"] * 100
 
-    def delta(kol):
+    def delta_kpi(kol):
+        """(teks delta, arah) ala prototype: ▲/▼/± dengan warna hijau/merah."""
         if pembanding is None:
-            return None
-        return f"{fmt_id((tot[kol] / pembanding[kol] - 1) * 100, 1)}% vs 2024"
+            return None, None
+        v = (tot[kol] / pembanding[kol] - 1) * 100
+        arah = "naik" if v > 0 else ("turun" if v < 0 else "datar")
+        return f"{fmt_id(abs(v), 1)}%", arah
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Jumlah usaha", fmt_id(tot["usaha"]), delta("usaha"))
-    c2.metric("Jumlah pekerja", fmt_id(tot["pekerja_total"]), delta("pekerja_total"))
-    c3.metric("Pendapatan (Rp triliun)", fmt_id(tot["pendapatan_triliun"], 1), delta("pendapatan_triliun"))
-    c4.metric("Margin kasar", f"{fmt_id(margin, 1)}%", help="(Pendapatan - pengeluaran) / pendapatan")
+    def delta_poin():
+        if marg0 is None:
+            return None, None
+        v = margin - marg0
+        arah = "naik" if v > 0 else ("turun" if v < 0 else "datar")
+        return f"{fmt_id(abs(v), 1)} poin", arah
+
+    d_usaha, a_usaha = delta_kpi("usaha")
+    d_pek, a_pek = delta_kpi("pekerja_total")
+    d_pend, a_pend = delta_kpi("pendapatan_triliun")
+    d_kel, a_kel = delta_kpi("pengeluaran_triliun")
+    d_mar, a_mar = delta_poin()
+    k1, k2, k3, k4, k5 = st.columns(5)
+    with k1:
+        st.markdown(kartu_kpi("Jumlah usaha", fmt_id(tot["usaha"]), "usaha", d_usaha, a_usaha), unsafe_allow_html=True)
+    with k2:
+        st.markdown(kartu_kpi("Total pekerja", fmt_id(tot["pekerja_total"]), "orang", d_pek, a_pek), unsafe_allow_html=True)
+    with k3:
+        st.markdown(kartu_kpi("Pendapatan", fmt_id(tot["pendapatan_triliun"], 1), "Rp triliun", d_pend, a_pend), unsafe_allow_html=True)
+    with k4:
+        st.markdown(kartu_kpi("Pengeluaran", fmt_id(tot["pengeluaran_triliun"], 1), "Rp triliun", d_kel, a_kel), unsafe_allow_html=True)
+    with k5:
+        st.markdown(kartu_kpi("Margin kasar", f"{fmt_id(margin, 1)}%", "", d_mar, a_mar), unsafe_allow_html=True)
 
     st.write("")
     pilih = st.selectbox("Tampilkan berdasarkan", list(METRIK), key="rank_metrik")
@@ -438,11 +566,11 @@ with tab_ringkas:
 
     kiri, kanan = st.columns([3, 2])
     with kiri:
-        top = p_tahun.nlargest(10, kol).sort_values(kol)
-        fig = px.bar(top, x=kol, y="provinsi", orientation="h", color_discrete_sequence=[BIRU],
-                     title=f"10 provinsi teratas: {pilih}, {tahun}")
+        top = p_tahun.nlargest(8, kol).sort_values(kol)
+        fig = px.bar(top, x=kol, y="provinsi", orientation="h",
+                     title=f"8 provinsi teratas: {pilih}, {tahun}")
         fig.update_traces(texttemplate="%{x:" + fmt + "}", textposition="outside", cliponaxis=False,
-                          marker_line_width=0)
+                          marker_line_width=0, marker_color=warna_rank(len(top)))
         fig.update_layout(xaxis_title=sat, yaxis_title="", bargap=0.35)
         fig.update_yaxes(showgrid=False)
         tampil(fig, 440)
@@ -505,9 +633,10 @@ with tab_sektor:
     pil = st.selectbox("Ukuran", list(METRIK), key="sektor_metrik")
     kol, sat, fmt = METRIK[pil]
     s = k_tahun.sort_values(kol)
-    fig = px.bar(s, x=kol, y="label", orientation="h", color_discrete_sequence=[BIRU],
+    fig = px.bar(s, x=kol, y="label", orientation="h",
                  title=f"{pil} menurut jenis industri (KBLI 2 digit), {tahun}")
-    fig.update_traces(texttemplate="%{x:" + fmt + "}", textposition="outside", cliponaxis=False, marker_line_width=0)
+    fig.update_traces(texttemplate="%{x:" + fmt + "}", textposition="outside", cliponaxis=False,
+                      marker_line_width=0, marker_color=warna_rank(len(s)))
     fig.update_layout(xaxis_title=sat, yaxis_title="", bargap=0.3)
     fig.update_yaxes(showgrid=False)
     tampil(fig, 680)
@@ -520,9 +649,10 @@ with tab_sektor:
     st.subheader("Produktivitas menurut jenis industri")
     ind = st.selectbox("Indikator", list(INDIKATOR), key="sektor_ind")
     s2 = k_tahun.sort_values(INDIKATOR[ind])
-    fig = px.bar(s2, x=INDIKATOR[ind], y="label", orientation="h", color_discrete_sequence=[BIRU],
+    fig = px.bar(s2, x=INDIKATOR[ind], y="label", orientation="h",
                  title=f"{ind}, {tahun}")
-    fig.update_traces(texttemplate="%{x:,.1f}", textposition="outside", cliponaxis=False, marker_line_width=0)
+    fig.update_traces(texttemplate="%{x:,.1f}", textposition="outside", cliponaxis=False,
+                      marker_line_width=0, marker_color=warna_rank(len(s2)))
     fig.update_layout(xaxis_title="", yaxis_title="", bargap=0.3)
     fig.update_yaxes(showgrid=False)
     tampil(fig, 680)
@@ -531,8 +661,46 @@ with tab_sektor:
 
 # ================================================================ 4. Perubahan
 with tab_ubah:
-    st.subheader("Perubahan nasional")
+    st.subheader("Perbandingan 2024–2025")
+    st.caption("Batang abu-abu 2024, batang navy 2025 — ala panel perbandingan prototype.")
     nas = perubahan_nasional(prov)
+    banding = [
+        ("Jumlah usaha", nas.loc["Jumlah usaha", "2024"], nas.loc["Jumlah usaha", "2025"],
+         nas.loc["Jumlah usaha", "perubahan_pct"], "juta usaha", 1e6),
+        ("Total pekerja", nas.loc["Pekerja (total)", "2024"], nas.loc["Pekerja (total)", "2025"],
+         nas.loc["Pekerja (total)", "perubahan_pct"], "juta orang", 1e6),
+        ("Pendapatan", nas.loc["Pendapatan (000 Rp)", "2024"] / 1e9, nas.loc["Pendapatan (000 Rp)", "2025"] / 1e9,
+         nas.loc["Pendapatan (000 Rp)", "perubahan_pct"], "Rp triliun", 1),
+        ("Pengeluaran", nas.loc["Pengeluaran (000 Rp)", "2024"] / 1e9, nas.loc["Pengeluaran (000 Rp)", "2025"] / 1e9,
+         nas.loc["Pengeluaran (000 Rp)", "perubahan_pct"], "Rp triliun", 1),
+    ]
+    b1, b2, b3, b4 = st.columns(4)
+    for kolom_c, (judul, v24, v25, pct_v, satuan, skala) in zip((b1, b2, b3, b4), banding):
+        with kolom_c:
+            fig = go.Figure()
+            fig.add_bar(x=["2024", "2025"], y=[v24, v25], marker_color=["#7F8C99", BIRU], width=0.55,
+                        text=[fmt_id(v24 / skala, 1) if satuan != "Rp triliun" else fmt_id(v24, 1),
+                              fmt_id(v25 / skala, 1) if satuan != "Rp triliun" else fmt_id(v25, 1)],
+                        textposition="outside")
+            fig.update_layout(title=f"{judul} ({satuan})", height=260, showlegend=False,
+                              margin=dict(l=10, r=10, t=45, b=10), template="simple_white",
+                              font=dict(family=FONT, size=13, color="#2B3A4A"),
+                              paper_bgcolor="white", plot_bgcolor="white")
+            fig.update_xaxes(showgrid=False, linecolor="#C5CCD6")
+            fig.update_yaxes(showgrid=True, gridcolor="#EDF0F4", zeroline=False)
+            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+            st.markdown(f"Perubahan: **{'+' if pct_v > 0 else ''}{fmt_id(pct_v, 1)}%**")
+    p25 = prov[prov["tahun"] == 2025]
+    jawa_u = p25[p25["wilayah"] == "Jawa"]["usaha"].sum() / p25["usaha"].sum() * 100
+    jawa_p = p25[p25["wilayah"] == "Jawa"]["pendapatan_000"].sum() / p25["pendapatan_000"].sum() * 100
+    top3 = kbli[kbli["tahun"] == 2025].nlargest(3, "usaha")
+    pangsa3 = top3["usaha"].sum() / kbli[kbli["tahun"] == 2025]["usaha"].sum() * 100
+    st.markdown(callout_navy(
+        f"Pulau Jawa menyumbang {fmt_id(jawa_u, 1)}% jumlah usaha dan {fmt_id(jawa_p, 1)}% pendapatan nasional "
+        f"pada 2025. Tiga divisi KBLI teratas — {', '.join(top3['sektor'])} — mencakup {fmt_id(pangsa3, 1)}% usaha."
+    ), unsafe_allow_html=True)
+
+    st.subheader("Perubahan nasional")
     tmp = nas.copy()
     for kolom in ("2024", "2025"):
         tmp[kolom] = tmp[kolom].map(lambda v: fmt_id(v))
@@ -658,4 +826,15 @@ studi kasus modul penjualan. Sitasi: Chen, Sain, & Guo (2012), UCI Machine Learn
 (2) Hanya dua tahun, sehingga tidak ada peramalan deret waktu. (3) Provinsi baru hasil pemekaran Papua memiliki jumlah
 usaha kecil. (4) Hasil regresi dan klaster bersifat asosiatif dan eksploratif.
 """)
+
+# ---------------------------------------------------------------- Footer (ala prototype)
+st.markdown(
+    """
+<div style="margin-top:34px; border-top:1px solid #D9E1E9; padding-top:16px; color:#5A6B7B; font-size:0.85rem;">
+Sumber: Badan Pusat Statistik (BPS), Profil Industri Mikro dan Kecil 2024 &amp; 2025, Katalog 6104006.
+Repo asal: <a href="https://github.com/Lunatic-1/Dashboard_analisis_umkm" style="color:#1F4E79;">github.com/Lunatic-1/Dashboard_analisis_umkm</a>
+</div>
+""",
+    unsafe_allow_html=True,
+)
 
