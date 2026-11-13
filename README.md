@@ -26,16 +26,25 @@ Dashboard interaktif dibangun dengan Python, Streamlit, Plotly, statsmodels, dan
 
 1. **Konteks nasional (data BPS):** statistik industri mikro dan kecil per provinsi dan per jenis industri, 2024-2025.
 2. **Penjualan tingkat usaha:** analisis data transaksi satu usaha (tren, kinerja produk, Pareto, pola hari dan jam,
-   prakiraan omzet). Dapat memakai data simulasi bawaan atau berkas CSV/Excel yang diunggah.
+   prakiraan omzet). Dapat memakai contoh data transaksi nyata bawaan (UCI Online Retail) atau berkas CSV/Excel yang diunggah.
 
 ### Format data transaksi untuk diunggah
 
 Satu baris per produk yang terjual. Kolom wajib: tanggal/waktu, nama produk, jumlah, dan harga (satuan atau total).
 Kolom opsional: ID transaksi dan kategori. Pemetaan kolom dilakukan di dashboard, jadi nama kolom bebas. Angka seperti
-`Rp 18.000` dan pemisah kolom `;` dikenali. Contoh format: `data/contoh_penjualan_simulasi.csv`.
+`Rp 18.000` dan pemisah kolom `;` dikenali. Contoh format: `data/penjualan_uci_online_retail_1.csv`.
 
 Sumber data yang bisa dipakai: ekspor dari aplikasi kasir (CSV/Excel), catatan penjualan usaha yang Anda kenal (dengan izin),
-atau dataset publik transaksi toko roti/kafe di Kaggle. Data bawaan (`contoh_penjualan_simulasi.csv`) adalah **simulasi**.
+atau dataset publik transaksi toko roti/kafe di Kaggle.
+
+Data bawaan (`data/penjualan_uci_online_retail_1.csv` s.d. `_3.csv`) adalah **data transaksi nyata** dari UCI Online Retail, toko online di
+Inggris: 1 Des 2010-31 Mei 2011, 203.181 baris, 8.112 invoice, 3.360 produk, omzet ±Rp95,7 miliar. Ini 6 bulan pertama
+dari 12 bulan data asli (1 Des 2010-9 Des 2011, 528.272 baris); rentang dibatasi agar berkas muat di repositori.
+Harga asli dalam pound sterling (£) dikonversi ke rupiah dengan kurs £1 = Rp24.215 (kurs tengah GBP/IDR, 11 Nov 2026).
+Data ini **bukan data UMKM Indonesia** — dipakai sebagai studi kasus modul penjualan. Sitasi: Chen, D., Sain, S. L.,
+& Guo, K. (2012). *Data mining for the online retail industry: A case study of RFM model-based customer
+segmentation using data mining.* Journal of Database Marketing & Customer Strategy Management, 19(3).
+UCI Machine Learning Repository, dataset 352. Rincian pembersihan: `data/CATATAN_DATA_PENJUALAN.md`.
 
 ## Cara menjalankan
 
@@ -57,7 +66,10 @@ Dashboard_IMK/
 ├── data/
 │   ├── imk_provinsi_2024_2025.csv   # 38 provinsi x 2 tahun
 │   ├── imk_kbli_2024_2025.csv       # 23 divisi KBLI x 2 tahun
-│   └── contoh_penjualan_simulasi.csv  # contoh transaksi SIMULASI (kedai kopi)
+│   ├── penjualan_uci_online_retail_1.csv  # contoh transaksi NYATA, Des 2010-Jan 2011
+│   ├── penjualan_uci_online_retail_2.csv  # contoh transaksi NYATA, Feb-Mar 2011
+│   ├── penjualan_uci_online_retail_3.csv  # contoh transaksi NYATA, Apr-Mei 2011
+│   └── CATATAN_DATA_PENJUALAN.md          # sumber, pembersihan, dan batasan data contoh
 └── src/
     ├── data.py                 # pemuatan data BPS dan indikator turunan
     ├── analysis.py             # perubahan, regresi, klaster
@@ -71,7 +83,7 @@ Dashboard_IMK/
 - Tiga jenis industri terbanyak (Makanan, Pakaian Jadi, Kayu dan Anyaman) mencakup 70,5% usaha pada 2025.
 - Regresi: elastisitas pendapatan terhadap pekerja dibayar sekitar 0,50 dan terhadap pekerja tidak dibayar sekitar 0,42 (keduanya signifikan), dengan jumlah elastisitas 0,92. R-kuadrat 0,94. Dummy 2025 tidak signifikan.
 - Klaster: struktur lemah (silhouette 0,30 untuk 2024 dan 0,44 untuk 2025 pada k = 3) dan tidak stabil antar tahun.
-- Modul penjualan: pada data simulasi, Holt-Winters menghasilkan WAPE 14,4% pada 28 hari uji, dibandingkan 21,6% untuk baseline. Angka ini hanya menunjukkan modul berfungsi, bukan temuan tentang usaha nyata.
+- Modul penjualan (data contoh nyata, 28 hari uji terakhir Mei 2011): Holt-Winters menghasilkan WAPE 59,4%, dibandingkan 56,3% untuk baseline musiman-naif. Periode uji memuat 5 hari tutup (4 Sabtu dan libur 30 Mei), sehingga kedua model sama-sama kesulitan — pada data nyata yang berisik, model sederhana tidak kalah. Produk terlaris: Regency Cakestand 3 Tier (2,5% omzet); 5 produk teratas hanya 8,0% omzet (ekor panjang, 3.360 produk). Angka-angka ini menunjukkan modul berfungsi, bukan temuan tentang usaha nyata.
 
 ## Metodologi dan keterbatasan
 
@@ -85,3 +97,4 @@ Dashboard_IMK/
 ## Sumber
 
 Badan Pusat Statistik. *Profil Industri Mikro dan Kecil 2024* (Vol. 15, 2025) dan *Profil Industri Mikro dan Kecil 2025* (Vol. 16, 2026). Katalog 6104006.
+

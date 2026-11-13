@@ -4,6 +4,7 @@ Sumber data: BPS, Profil Industri Mikro dan Kecil 2024 dan 2025.
 Jalankan dengan:  streamlit run app.py
 """
 import io
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -112,7 +113,15 @@ def tabel_fmt(df: pd.DataFrame, desimal: int = 2) -> pd.DataFrame:
 # ---------------------------------------------------------------- Modul penjualan usaha
 @st.cache_data
 def _contoh():
-    return pj.contoh_data()
+    """Contoh data nyata: transaksi UCI Online Retail, 1 Des 2010-31 Mei 2011.
+
+    Data dibagi menjadi tiga berkas (data/penjualan_uci_online_retail_1.csv
+    s.d. _3.csv) karena batas ukuran berkas; digabung kembali di sini.
+    """
+    folder = Path(__file__).resolve().parent / "data"
+    berkas = sorted(folder.glob("penjualan_uci_online_retail_*.csv"))
+    df = pd.concat((pd.read_csv(b) for b in berkas), ignore_index=True)
+    return df.sort_values("waktu").reset_index(drop=True)
 
 
 @st.cache_data
@@ -133,24 +142,25 @@ def _tebak(kolom, kunci, opsional=False):
 def render_penjualan():
     st.subheader("Analisis penjualan tingkat usaha")
     st.caption("Tab ini menganalisis data transaksi satu usaha dan tidak dipengaruhi pengaturan di sidebar.")
-    sumber = st.radio("Sumber data", ["Contoh data simulasi", "Unggah data sendiri"], horizontal=True, key="jual_sumber")
+    sumber = st.radio("Sumber data", ["Contoh data nyata (UCI Online Retail)", "Unggah data sendiri"], horizontal=True, key="jual_sumber")
 
-    if sumber == "Contoh data simulasi":
-        st.warning(
-            "Data ini adalah SIMULASI sebuah kedai kopi selama satu tahun, dibuat untuk mendemonstrasikan fitur. "
-            "Pola seperti ramai di akhir pekan sudah ditanam pada generator, sehingga bukan temuan nyata. "
-            "Unggah data transaksi usaha yang sebenarnya untuk analisis yang bermakna."
+    if sumber == "Contoh data nyata (UCI Online Retail)":
+        st.info(
+            "Data contoh ini adalah data transaksi NYATA dari UCI Online Retail, toko online di Inggris "
+            "(1 Des 2010-31 Mei 2011, 203.181 baris). Harga asli dalam pound sterling sudah dikonversi ke rupiah "
+            "(£1 = Rp24.215). Ini bukan data UMKM Indonesia — pakai sebagai studi kasus modul penjualan, dan unggah "
+            "data transaksi usaha yang sebenarnya untuk analisis yang bermakna."
         )
         raw = _contoh()
         peta = dict(kol_waktu="waktu", kol_produk="produk", kol_jumlah="jumlah", kol_nilai="harga_satuan",
-                    nilai_adalah="Harga satuan", kol_id="id_transaksi", kol_kategori="kategori", dayfirst=False)
+                    nilai_adalah="Harga satuan", kol_id="id_transaksi", kol_kategori=None, dayfirst=False)
     else:
         berkas = st.file_uploader("Berkas transaksi (CSV atau Excel)", type=["csv", "xlsx", "xls"], key="jual_file")
         if berkas is None:
             st.info(
                 "Format yang dibutuhkan: satu baris untuk setiap produk yang terjual, dengan kolom tanggal/waktu, "
                 "nama produk, jumlah, dan harga (satuan atau total). Kolom ID transaksi dan kategori bersifat "
-                "opsional. Contoh format ada di `data/contoh_penjualan_simulasi.csv`."
+                "opsional. Contoh format ada di `data/penjualan_uci_online_retail_1.csv` (bagian 1 dari 3)."
             )
             return
         try:
@@ -363,7 +373,7 @@ def render_kesimpulan():
     st.markdown("""
 - Data BPS hanya mencakup industri pengolahan skala mikro dan kecil, dari survei sampel, dan hanya dua tahun.
 - Hasil regresi dan klaster bersifat asosiatif dan eksploratif.
-- Modul penjualan usaha memakai data simulasi kecuali pengguna mengunggah data transaksi sendiri.
+- Modul penjualan usaha memakai contoh data transaksi nyata (UCI Online Retail, bukan UMKM Indonesia) kecuali pengguna mengunggah data transaksi sendiri.
 """)
 
 # ---------------------------------------------------------------- Sidebar
@@ -640,9 +650,12 @@ komponen biaya.
 **Modul penjualan usaha.** Menganalisis data transaksi satu usaha. Pembersihan: tanggal tidak terbaca, produk kosong,
 jumlah tidak positif, dan nilai kosong atau negatif dibuang dan dilaporkan. Prakiraan memakai Holt-Winters (tren teredam dan
 musiman mingguan), dievaluasi pada 28 hari terakhir terhadap baseline musiman-naif dengan MAE dan WAPE. Contoh data yang
-tersedia adalah **simulasi** untuk demonstrasi, bukan data usaha nyata.
+tersedia adalah **data transaksi nyata** (UCI Online Retail, toko online Inggris, 1 Des 2010-31 Mei 2011;
+harga dalam pound sterling dikonversi ke rupiah, £1 = Rp24.215). Data ini bukan data UMKM Indonesia, melainkan
+studi kasus modul penjualan. Sitasi: Chen, Sain, & Guo (2012), UCI Machine Learning Repository, dataset 352.
 
 **Keterbatasan.** (1) Data survei sampel, sehingga angka provinsi memiliki galat sampling yang tidak tersedia di tabel.
 (2) Hanya dua tahun, sehingga tidak ada peramalan deret waktu. (3) Provinsi baru hasil pemekaran Papua memiliki jumlah
 usaha kecil. (4) Hasil regresi dan klaster bersifat asosiatif dan eksploratif.
 """)
+
